@@ -1,0 +1,30 @@
+{
+  "defaults": {
+    "project": 1,
+    "env": 1
+  },
+  "actives": {
+    "project": 1,
+    "env": 1
+  },
+  "projects": [
+    {
+      "idx": 1,
+      "id": "53418000000019001",
+      "name": "datathon-2026",
+      "domain": {
+        "id": "50044095907",
+        "name": "datathon-2026-60076596887.development"
+      },
+      "timezone": "Asia/Kolkata",
+      "env": [
+        {
+          "idx": 1,
+          "id": "60076596887",
+          "name": "Development",
+          "type": 3
+        }
+      ]
+    }
+  ]
+}
