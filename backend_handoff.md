@@ -2,16 +2,38 @@
 
 Backend = one Zoho Catalyst Advanced I/O Function: `functions/datathon_2026_function/`. Entry point `main.py`, path-routed (no framework router — just `if request.path == ...`).
 
-## Run it
+## Run it (for frontend wiring — real local server, uvicorn-equivalent)
 
-**Deployed (real Catalyst env, has DB/auth):**
-```
-cd functions/datathon_2026_function
-catalyst deploy   # or `catalyst serve` for local functions dev server
-```
-Needs Catalyst CLI logged into the project. Env var `ALLOW_UNAUTHENTICATED=true` lets you hit endpoints without a Catalyst auth token (dev only — leave unset/false in prod, or RBAC is bypassed).
+This is what you want to hit from the frontend during dev. Catalyst's local
+equivalent of `uvicorn main:app --reload` is `catalyst serve` — it runs the
+Function(s) locally at `http://localhost:6003` (default port), live-reloads
+on file changes, and proxies real Catalyst services (datastore/auth/cache)
+back to the cloud project, so RBAC/DB calls work exactly like prod.
 
-**Local dev harness (no deploy needed, hits deployed function URL):**
+From repo root (not inside the function folder — `catalyst.json` at root
+already points `functions.source` at `functions/`):
+```
+npm install -g zcatalyst-cli   # already installed here, one-time on new machines
+catalyst login                 # one-time, opens browser
+catalyst serve
+```
+CLI is already logged into project `datathon-2026` / env `Development` (see
+`.catalystrc` at repo root) — should just work.
+
+Base URL once running: `http://localhost:6003/server/datathon_2026_function`
+(Catalyst prefixes each function's routes with `/server/<function-name>`).
+So e.g. `POST http://localhost:6003/server/datathon_2026_function/api/query`.
+
+Set `ALLOW_UNAUTHENTICATED=true` in the function's env (Catalyst console →
+your function → Environment Variables, or a local `.env` if `catalyst serve`
+picks one up) while your login flow isn't wired yet — otherwise every
+endpoint 401s with no auth token. Turn it back off before prod deploy.
+
+`catalyst deploy` pushes to the actual cloud Function URL instead of
+localhost — use that once you want a stable URL that doesn't depend on your
+machine being on.
+
+**Local dev harness (Streamlit, not for frontend wiring — manual endpoint testing only):**
 ```
 cd streamlit_harness
 pip install -r requirements.txt
