@@ -5,11 +5,49 @@ SDK init path (refresh-token credential), not zcatalyst_sdk.initialize(),
 since that variant only works inside a running Catalyst Function.
 """
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Must run before `import zcatalyst_sdk` — the SDK reads
+# X_ZOHO_CATALYST_ACCOUNTS_URL at import time (_constants.py), not lazily,
+# so loading .env any later (e.g. in app.py) is too late and it silently
+# defaults to the unreachable accounts.localzoho.com placeholder.
+# Explicit path (not bare load_dotenv()) — that searches upward from cwd,
+# so it silently finds nothing if `streamlit run` is launched from repo
+# root instead of from inside streamlit_harness/.
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 import streamlit as st
 import zcatalyst_sdk
 from zcatalyst_sdk import credentials
 from zcatalyst_sdk.types import ICatalystOptions
+
+# zcatalyst_sdk==1.4.0's HttpClient.request builds urls as
+# f"{base_url}/{path}" where `path` already starts with "/" — every request
+# (incl. the oauth token exchange) ends up as e.g.
+# "https://accounts.zoho.in//oauth/v2/token". accounts.localzoho.com (the
+# unset-env default) never surfaced this, since DNS/SSL failed first; once
+# pointed at the real accounts.zoho.in host, that double slash 404s with an
+# HTML error page, which the SDK then chokes on trying to .json() it
+# (surfaces as opaque "UNPARSABLE_RESPONSE"). Patched here instead of
+# editing site-packages so it survives a `pip install -r requirements.txt`.
+import requests as _requests
+
+_orig_session_request = _requests.Session.request
+
+
+def _dedupe_double_slash_request(self, method, url, *args, **kwargs):
+    scheme_sep = "://"
+    if scheme_sep in url:
+        scheme, rest = url.split(scheme_sep, 1)
+        while "//" in rest:
+            rest = rest.replace("//", "/")
+        url = f"{scheme}{scheme_sep}{rest}"
+    return _orig_session_request(self, method, url, *args, **kwargs)
+
+
+_requests.Session.request = _dedupe_double_slash_request
 
 REQUIRED_ENV = [
     "CATALYST_REFRESH_TOKEN",

@@ -21,7 +21,10 @@ import time
 
 import requests
 
-_ACCOUNTS_URL = os.environ.get("CATALYST_ACCOUNTS_URL", "https://accounts.zoho.in/oauth/v2/token")
+# NOT the same var as CATALYST_ACCOUNTS_URL (zcatalyst_sdk reads that one at
+# import time as a bare domain, e.g. "https://accounts.zoho.in" — reusing it
+# here silently dropped "/oauth/v2/token" and broke the token refresh call).
+_ACCOUNTS_URL = os.environ.get("QUICKML_OAUTH_TOKEN_URL", "https://accounts.zoho.in/oauth/v2/token")
 _MODEL = os.environ.get("QUICKML_MODEL", "crm-di-glm47b_30b_it")
 
 _token_cache: dict[str, float | str] = {"access_token": "", "expires_at": 0.0}

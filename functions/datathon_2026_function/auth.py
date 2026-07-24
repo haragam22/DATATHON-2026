@@ -111,7 +111,7 @@ def write_audit_log(
         "AppUserID_FK": app_user["app_user_rowid"] if app_user else None,
         "QueryText": question,
         "GeneratedSQL": generated_sql,
-        "Time_stamp": datetime.now(timezone.utc).replace(microsecond=0).isoformat(sep=" "),
+        "Time_stamp": datetime.now(timezone.utc).replace(microsecond=0, tzinfo=None).isoformat(sep=" "),  # naive, no tz offset — see conversation.py _catalyst_now
         "ResultRowCount": result_row_count,
     })
 

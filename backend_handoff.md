@@ -2,22 +2,131 @@
 
 Backend = one Zoho Catalyst Advanced I/O Function: `functions/datathon_2026_function/`. Entry point `main.py`, path-routed (no framework router — just `if request.path == ...`).
 
-## Run it
+## Run it (for frontend wiring — real local server, uvicorn-equivalent)
 
-**Deployed (real Catalyst env, has DB/auth):**
-```
-cd functions/datathon_2026_function
-catalyst deploy   # or `catalyst serve` for local functions dev server
-```
-Needs Catalyst CLI logged into the project. Env var `ALLOW_UNAUTHENTICATED=true` lets you hit endpoints without a Catalyst auth token (dev only — leave unset/false in prod, or RBAC is bypassed).
+This is what you want to hit from the frontend during dev. Catalyst's local
+equivalent of `uvicorn main:app --reload` is `catalyst serve` — it runs the
+Function(s) locally at `http://localhost:3000` (confirmed port on this
+machine — check your terminal's `catalyst serve` startup log for the actual
+port if it differs), live-reloads
+on file changes, and proxies real Catalyst services (datastore/auth/cache)
+back to the cloud project, so RBAC/DB calls work exactly like prod.
 
-**Local dev harness (no deploy needed, hits deployed function URL):**
+From repo root (not inside the function folder — `catalyst.json` at root
+already points `functions.source` at `functions/`):
+```
+npm install -g zcatalyst-cli   # already installed here, one-time on new machines
+catalyst login                 # one-time, opens browser
+catalyst serve
+```
+CLI is already logged into project `datathon-2026` / env `Development` (see
+`.catalystrc` at repo root) — should just work.
+
+Base URL once running: `http://localhost:3000/server/datathon_2026_function`
+(Catalyst prefixes each function's routes with `/server/<function-name>`).
+So e.g. `POST http://localhost:3000/server/datathon_2026_function/api/query`.
+Bare `http://localhost:3000/` (no `/server/...` prefix) is Catalyst's local
+dev **console UI** (redirects to `/app/`), not the API — don't point the
+frontend at that.
+
+Set `ALLOW_UNAUTHENTICATED=true` in the function's env (Catalyst console →
+your function → Environment Variables, or a local `.env` if `catalyst serve`
+picks one up) while your login flow isn't wired yet — otherwise every
+endpoint 401s with no auth token. Turn it back off before prod deploy.
+
+`catalyst deploy` pushes to the actual cloud Function URL instead of
+localhost — use that once you want a stable URL that doesn't depend on your
+machine being on.
+
+**Local dev harness (Streamlit, not for frontend wiring — manual endpoint testing only):**
 ```
 cd streamlit_harness
 pip install -r requirements.txt
 streamlit run app.py
 ```
 Has a tab per endpoint pre-filled with sample payloads, plus schema browser / raw ZCQL query runner. `.env` needs whatever `catalyst_client.py` expects (Catalyst project creds). This harness is dev-only, never deployed/submitted.
+
+## Production auth (no OAuth setup needed — this is only for the harness)
+
+The self-client refresh-token/scopes dance in the next section is **only**
+for the Streamlit harness, because it's a standalone script running outside
+Catalyst and has to authenticate itself from scratch. Production/deployed
+code needs none of it.
+
+In prod, `main.py` does `zcatalyst_sdk.initialize(req=request)` —
+Catalyst injects whoever's logged in from the incoming HTTP request
+automatically. No refresh token, no client_id/secret, no scopes to set up
+per environment.
+
+What that means for wiring up the real app:
+- Frontend handles login via Catalyst's built-in Authentication service
+  (Catalyst client SDK's login flow — a normal user/password or OAuth login
+  screen, unrelated to the self-client stuff below). That's on you to wire
+  up; ask if you need pointers on Catalyst's client-side auth SDK.
+- Once a user's logged in, every request their browser makes to the Function
+  carries that identity automatically — `auth.py`'s `resolve_app_user()`
+  reads it via `app.authentication().get_current_user()`, maps it to an
+  `AppUser`/`AppRole` row, and `check_scope()` gates by role. This already
+  works as-is, whether you're hitting `catalyst serve` locally or the
+  deployed Function — no separate config per environment.
+- `ALLOW_UNAUTHENTICATED` must be **unset or `false`** on the deployed
+  Function's env (Catalyst console → your function → Environment
+  Variables). Leave it `true` only while testing locally without a login
+  flow wired up yet — `true` in prod means any unauthenticated request
+  skips RBAC entirely, since there's no logged-in user to check a role
+  against.
+
+## Streamlit harness setup (one-time, self-client OAuth)
+
+The harness doesn't use `catalyst login` — it talks to Catalyst as a
+standalone script via a Zoho self-client OAuth app, config lives in
+`streamlit_harness/.env` (copy from `.env.example`). Three things WILL trip
+you up if skipped — all baked into `.env.example` now, but if you're
+generating your own credentials from scratch:
+
+1. **Generate the refresh token with the right scopes.** Zoho API Console →
+   your Self Client → Generate Code → paste this exact scope string (the
+   scope group is called `tables`, NOT `datastore`/`baas` — those names get
+   rejected by the console even though the internal REST path is
+   `/baas/...`):
+   ```
+   ZohoCatalyst.tables.READ,ZohoCatalyst.tables.rows.READ,ZohoCatalyst.tables.rows.CREATE,ZohoCatalyst.tables.rows.UPDATE,ZohoCatalyst.tables.rows.DELETE,ZohoCatalyst.tables.columns.READ,ZohoCatalyst.zcql.CREATE
+   ```
+   The code Zoho gives you expires in 10 minutes — exchange it immediately:
+   `POST https://accounts.zoho.in/oauth/v2/token` with
+   `grant_type=authorization_code`, `code=<that grant code>`, your
+   `client_id`/`client_secret`. The **refresh_token** in that response is
+   permanent (doesn't expire — only dies if you regenerate the client secret
+   or explicitly revoke it) — that's what goes in `CATALYST_REFRESH_TOKEN`.
+   Wrong scope name shows up as `OAUTH_SCOPE_MISMATCH` 401s specifically on
+   Schema Browser / Data Inspector calls (query-pipeline tabs use a
+   different, already-correct scope, so those working ≠ everything working).
+
+2. **Set `CATALYST_ACCOUNTS_URL`/`X_ZOHO_CATALYST_ACCOUNTS_URL`** to
+   `https://accounts.zoho.in` in `.env`. `zcatalyst_sdk` defaults this to a
+   nonexistent `accounts.localzoho.com` placeholder and reads it at
+   **import time**, so setting it anywhere except before
+   `import zcatalyst_sdk` (i.e. top of `catalyst_client.py`, before
+   `streamlit`/`app.py` get a chance to) does nothing.
+
+3. **Set `X_ZOHO_CATALYST_CONSOLE_URL=https://console.catalyst.zoho.in`.**
+   The self-client refresh-token credential is always treated as ADMIN scope
+   by the SDK (it never checks the per-call `user=` kwarg), and ADMIN-scope
+   calls route through this var, not `project_domain`/`api.catalyst.zoho.in`.
+   Left unset, this silently defaults to a fake `.localzoho.com` host that
+   hangs on DNS instead of erroring — the "request never seems to
+   finish/nothing happens" symptom, not a clean 401/500.
+
+All three are already in `.env.example` — just fill in the three `<SET_ME>`
+values (refresh token, client id, client secret) and everything else works.
+
+Also, `catalyst_client.py` carries one more permanent patch for a real SDK
+bug (not an env issue): `zcatalyst_sdk==1.4.0` builds request URLs as
+`base_url + "/" + path` where `path` already starts with `/`, producing a
+double slash (`accounts.zoho.in//oauth/v2/token`) that 404s with an HTML
+error page the SDK then can't `.json()`-parse. Patched via a
+`requests.Session.request` wrapper in that file — don't need to touch it
+again unless upgrading the SDK fixes it upstream.
 
 ## Auth & roles
 

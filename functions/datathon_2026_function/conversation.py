@@ -29,6 +29,17 @@ from typing import Any
 import zcql_util
 
 
+def _catalyst_now() -> str:
+    """Default timestamp for Catalyst DateTime columns. Must be a naive
+    'YYYY-MM-DD HH:MM:SS' string with NO timezone offset suffix — the actual
+    bug behind repeated 'datetime value expected' errors was
+    datetime.now(timezone.utc).isoformat() appending '+00:00', which the
+    Data Store API rejects outright (epoch-millis was also rejected).
+    Matches the naive-isoformat convention data_generation's CSV bulk-import
+    generators already use successfully for the same DateTime columns."""
+    return datetime.now(timezone.utc).replace(microsecond=0, tzinfo=None).isoformat(sep=" ")
+
+
 class SessionNotFound(Exception):
     pass
 
@@ -63,31 +74,19 @@ def get_or_create_session(app: Any, zcql_service: Any, app_user: dict[str, Any] 
         _check_ownership(int(owner) if owner is not None else None, app_user)
         return int(session_id)
 
-    now = datetime.now(timezone.utc).replace(microsecond=0).isoformat(sep=" ")
+    now = _catalyst_now()
+    # SessionID is a mandatory business column, not the table's auto-increment
+    # ROWID, so it must be supplied on insert. Compute next value ourselves;
+    # ponytail: max+1 race under concurrent inserts, acceptable for this MVP.
+    max_rows = zcql_util.run(zcql_service, "SELECT SessionID FROM ConversationSession ORDER BY SessionID DESC LIMIT 1")
+    next_session_id = int(max_rows[0]["SessionID"]) + 1 if max_rows else 1
     app.datastore().table("ConversationSession").insert_row({
+        "SessionID": next_session_id,
         "AppUserID_FK": app_user["app_user_rowid"] if app_user else None,
         "StartedAt": now,
         "EndedAt": None,
     })
-    # Re-query rather than trust the insert response's shape (unconfirmed
-    # whether it echoes back the auto-increment SessionID) — same
-    # defensive pattern as zcql_util.run's row-shape handling. Filters by
-    # AppUserID_FK when known; "IS NULL" isn't a confirmed-working ZCQL
-    # clause here, so the anonymous case falls back to "most recent row
-    # overall" — a small race risk under concurrent anonymous sessions,
-    # ponytail: acceptable for this MVP, narrow with a request-scoped
-    # marker if that ever matters.
-    if app_user:
-        rows = zcql_util.run(
-            zcql_service,
-            f"SELECT SessionID FROM ConversationSession WHERE AppUserID_FK = {app_user['app_user_rowid']} "
-            f"ORDER BY SessionID DESC LIMIT 1",
-        )
-    else:
-        rows = zcql_util.run(zcql_service, "SELECT SessionID FROM ConversationSession ORDER BY SessionID DESC LIMIT 1")
-    if not rows:
-        raise RuntimeError("ConversationSession insert succeeded but the row could not be re-read")
-    return int(rows[0]["SessionID"])
+    return next_session_id
 
 
 def log_message(
@@ -99,14 +98,17 @@ def log_message(
         raise SessionNotFound(f"SessionID {session_id} not found")
     session_rowid = int(session_rows[0]["ROWID"])
 
+    max_rows = zcql_util.run(zcql_service, "SELECT MessageID FROM ConversationMessage ORDER BY MessageID DESC LIMIT 1")
+    next_message_id = int(max_rows[0]["MessageID"]) + 1 if max_rows else 1
     app.datastore().table("ConversationMessage").insert_row({
+        "MessageID": next_message_id,
         "SessionID_FK": session_rowid,
         "Role": role,
         "MessageText": message_text,
         "GeneratedSQL": generated_sql,
         "ConfidenceScore": confidence_score,
         "CitedCaseMasterIDs": ",".join(str(c) for c in (cited_case_ids or [])),
-        "CreatedAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat(sep=" "),
+        "CreatedAt": _catalyst_now(),
     })
 
 
