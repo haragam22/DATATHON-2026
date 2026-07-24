@@ -1,0 +1,471 @@
+"""POST /api/query orchestrator — Stage 1 (intent extraction) -> Stage 2
+(verifier) -> schema-constrained SQL generation -> self-consistency check ->
+execute -> post-execution sanity check -> answer generation -> entailment
+check -> response envelope. Per technical.md's pipeline diagram and
+CLAUDE.md's "these are mandatory pipeline steps, not optional" rule.
+
+follow_up_questions is Phase 10 scope — envelope field exists (per the
+agreed wire contract) but this module always returns it empty.
+AuditLog writes are Phase 17 scope — not done here yet.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field, ValidationError
+
+import language
+import quickml_client
+import zcql_util
+from schema_registry import ADJACENT_TABLES, ALLOWED_SCHEMA, render_relationships_for_prompt, render_schema_for_prompt
+
+_SCHEMA_TEXT = render_schema_for_prompt()
+_RELATIONSHIPS_TEXT = render_relationships_for_prompt()
+
+_MAX_PLAN_STEPS = 6
+
+_FORBIDDEN_SQL_KEYWORDS = (
+    "INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "TRUNCATE", "CREATE",
+    "GRANT", "REVOKE", "--", "/*", ";",
+)
+
+_MAX_RESULT_ROWS = 500  # post-execution sanity bound, not a hard DB limit
+
+
+class QueryIntent(BaseModel):
+    entities: list[str] = Field(default_factory=list)
+    filters: dict[str, Any] = Field(default_factory=dict)
+    time_range: str | None = None
+    aggregation: str | None = None
+
+
+class QueryStep(BaseModel):
+    table: str
+    select: str  # a single column, or an aggregate like COUNT(CseMasterID)
+    where: str = ""  # may reference {prev} for the previous step's ID list
+    is_final: bool = False
+
+
+class QueryEnvelope(BaseModel):
+    response_type: Literal["card", "chart", "map", "network", "evidence", "text"]
+    data: dict[str, Any]
+    cited_case_ids: list[int] = Field(default_factory=list)
+    generated_sql: str = ""
+    confidence_score: float = 0.0
+    follow_up_questions: list[str] = Field(default_factory=list)
+
+
+class ClarificationNeeded(Exception):
+    def __init__(self, question: str):
+        self.question = question
+        super().__init__(question)
+
+
+class PipelineError(Exception):
+    """Any stage failure that isn't a clarification request — surfaced to
+    the caller as a 'text' envelope with confidence 0, never swallowed."""
+
+
+def _extract_json_object(text: str) -> dict[str, Any]:
+    """QuickML sometimes wraps JSON in prose despite instructions — pull
+    out the first {...} block rather than trusting json.loads(text) raw."""
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if not match:
+        raise PipelineError(f"no JSON object found in QuickML output: {text!r}")
+    return json.loads(match.group(0))
+
+
+# ---------------------------------------------------------------------------
+# Stage 1: Intent extraction
+# ---------------------------------------------------------------------------
+
+_INTENT_SYSTEM_PROMPT = (
+    "Extract structured intent from a police-database natural language "
+    "question. Respond with ONLY a JSON object, no prose, matching this "
+    "shape exactly: "
+    '{"entities": [<strings, e.g. case ids, names, districts, crime types>], '
+    '"filters": {<key-value filter conditions>}, '
+    '"time_range": <string or null>, '
+    '"aggregation": <"count"|"sum"|"avg"|"list"|null>}'
+)
+
+
+def extract_intent(question: str) -> QueryIntent:
+    raw = quickml_client.chat(
+        [
+            {"role": "system", "content": _INTENT_SYSTEM_PROMPT},
+            {"role": "user", "content": question},
+        ],
+        max_tokens=400, temperature=0.2,
+    )
+    try:
+        return QueryIntent.model_validate(_extract_json_object(raw))
+    except (ValidationError, json.JSONDecodeError, PipelineError) as e:
+        raise PipelineError(f"Stage 1 intent extraction failed: {e}") from e
+
+
+# ---------------------------------------------------------------------------
+# Stage 2: Verifier
+# ---------------------------------------------------------------------------
+
+_VERIFIER_SYSTEM_PROMPT = (
+    "You check whether an extracted intent JSON actually matches the "
+    "original question. If it matches well enough to answer confidently, "
+    'respond with exactly: {"match": true}. '
+    "If the question is ambiguous or the intent misses/misreads something "
+    "important, respond with exactly: "
+    '{"match": false, "clarifying_question": "<one short question to ask '
+    'the user>"}. Respond with ONLY the JSON object, no prose.'
+)
+
+
+def verify_intent(question: str, intent: QueryIntent) -> None:
+    """Raises ClarificationNeeded if the intent doesn't match well enough —
+    CLAUDE.md: ambiguous intent must trigger a clarifying question, never a
+    silent best-guess pick."""
+    raw = quickml_client.chat(
+        [
+            {"role": "system", "content": _VERIFIER_SYSTEM_PROMPT},
+            {"role": "user", "content": (
+                f"Question: {question}\nExtracted intent: {intent.model_dump_json()}"
+            )},
+        ],
+        max_tokens=200, temperature=0.0,
+    )
+    try:
+        result = _extract_json_object(raw)
+    except (json.JSONDecodeError, PipelineError) as e:
+        raise PipelineError(f"Stage 2 verifier failed: {e}") from e
+    if not result.get("match", False):
+        raise ClarificationNeeded(
+            result.get("clarifying_question", "Could you clarify your question?")
+        )
+
+
+# ---------------------------------------------------------------------------
+# Schema-constrained query PLAN generation + guard
+#
+# ZCQL's JOIN requires a real console-configured Lookup relationship column
+# — confirmed live: EVERY tested _FK-named column (including textbook ones
+# like Accused.CaseMasterID_FK -> CaseMaster) fails with "No relationship
+# between tables X and Y", because this schema's _FK columns are plain
+# integers from CSV import, not Lookup-type columns. ZCQL JOIN is therefore
+# unusable on this schema. Cross-table filtering instead happens as a chain
+# of single-table SELECTs in Python — same batched, no-N+1 pattern already
+# used in network.py — with each step's WHERE clause referencing the
+# previous step's result IDs via a literal {prev} substitution, never a
+# nested SELECT (also confirmed unsupported: 'Nested Sub query is not
+# supported').
+# ---------------------------------------------------------------------------
+
+_PLAN_SYSTEM_PROMPT = (
+    "Generate a JSON query PLAN that answers the question, using ONLY "
+    "these tables and columns, no others:\n\n"
+    f"{_SCHEMA_TEXT}\n\n"
+    "The plan is a JSON object: "
+    '{"steps": [{"table": <name>, "select": <single column, or an '
+    'aggregate like COUNT(CseMasterID)>, "where": <condition string, or '
+    '"">, "is_final": <bool>}, ...]}\n\n'
+    "Rules, all confirmed against real API behavior, not hypothetical:\n"
+    "- NO JOIN keyword anywhere — this database's foreign-key columns are "
+    "plain integers, not real relationships, so JOIN always fails.\n"
+    "- NO nested SELECT anywhere in a where clause — always fails.\n"
+    "- NO '*' inside an aggregate function — write COUNT(CseMasterID), "
+    "never COUNT(*).\n"
+    "- To filter across tables, write ONE step per table, in dependency "
+    "order (the table with the literal filter value first). Every step "
+    "after the first should reference the placeholder {prev} in its where "
+    "clause to mean 'the ROWID values returned by the previous step', e.g. "
+    "\"DistrictID_FK IN ({prev})\". The step selecting {prev}'s source "
+    "should select ROWID.\n"
+    "- Only these table pairs may be chained this way (the FK actually "
+    "points from the first to the second):\n\n"
+    f"{_RELATIONSHIPS_TEXT}\n\n"
+    "- Exactly one step must have is_final=true — it must be a query "
+    "against the table that actually answers the question (usually "
+    "CaseMaster), and comes last.\n"
+    "- Keep the plan to as few steps as the question actually needs — "
+    "most questions need only 1-3 steps.\n"
+    "- CaseMaster has NO DistrictID_FK column. To filter cases by "
+    "district, you MUST go through Unit (CaseMaster.PoliceStationID_FK is "
+    "a Unit ROWID, and Unit.DistrictID_FK is a District ROWID) — never "
+    "join District straight to CaseMaster, that FK doesn't exist. Worked "
+    "example for \"cases in Ballari district\":\n"
+    '{"steps": ['
+    '{"table": "District", "select": "ROWID", '
+    '"where": "DistrictName = \'Ballari\'", "is_final": false}, '
+    '{"table": "Unit", "select": "ROWID", '
+    '"where": "DistrictID_FK IN ({prev})", "is_final": false}, '
+    '{"table": "CaseMaster", "select": "CseMasterID", '
+    '"where": "PoliceStationID_FK IN ({prev})", "is_final": true}'
+    "]}\n"
+    "Specific offence names (Murder, Robbery, Theft, NDPS, Dacoity, etc.) "
+    "are in CrimeSubHead.CrimeHeadName — NOT CrimeHead.CrimeGroupName, "
+    "which only holds broad categories like 'Crimes Against Body'. A "
+    "question naming a specific offence must filter CrimeSubHead."
+    "CrimeHeadName, joining to CaseMaster via CrimeMinorHeadID_FK.\n"
+    "Respond with ONLY the JSON object, no prose, no markdown fences."
+)
+
+
+class QueryPlan(BaseModel):
+    steps: list[QueryStep]
+
+
+def _generate_plan_once(question: str, intent: QueryIntent, feedback: str | None = None) -> QueryPlan:
+    user_content = f"Question: {question}\nIntent: {intent.model_dump_json()}"
+    if feedback:
+        user_content += f"\n\nYour previous plan was rejected: {feedback}\nFix it and try again."
+    raw = quickml_client.chat(
+        [
+            {"role": "system", "content": _PLAN_SYSTEM_PROMPT},
+            {"role": "user", "content": user_content},
+        ],
+        max_tokens=500, temperature=0.1,
+    )
+    try:
+        plan = QueryPlan.model_validate(_extract_json_object(raw))
+    except (ValidationError, json.JSONDecodeError, PipelineError) as e:
+        raise PipelineError(f"plan generation produced invalid JSON: {e}") from e
+    if not plan.steps:
+        raise PipelineError("generated plan has zero steps")
+    return plan
+
+
+def _generate_valid_plan(question: str, intent: QueryIntent) -> QueryPlan:
+    """One generation attempt, plus one repair retry with the validation
+    error fed back to the model — LLMs reliably produce a structurally
+    valid plan that still skips a required intermediate JOIN hop on the
+    first try (confirmed live), so a single blind retry recovers most of
+    those without a human in the loop."""
+    plan = _generate_plan_once(question, intent)
+    try:
+        validate_plan(plan)
+        return plan
+    except PipelineError as first_error:
+        plan = _generate_plan_once(question, intent, feedback=str(first_error))
+        validate_plan(plan)  # let this raise straight through if still invalid
+        return plan
+
+
+def _normalize_plan(plan: QueryPlan) -> str:
+    return json.dumps([s.model_dump() for s in plan.steps], sort_keys=True)
+
+
+def render_plan_as_sql(plan: QueryPlan) -> str:
+    """Debug-friendly rendering for the envelope's generated_sql field —
+    not itself executable as one statement, just a readable trace."""
+    return "; ".join(
+        f"SELECT {s.select} FROM {s.table}" + (f" WHERE {s.where}" if s.where else "")
+        for s in plan.steps
+    )
+
+
+def validate_plan(plan: QueryPlan) -> None:
+    """Schema-constrained guard over the plan, not a raw SQL string.
+    Column-level checking is best-effort (aggregate-wrapped select isn't
+    unwrapped and checked) since a real SQL parser isn't in this project's
+    dependency set yet.
+    ponytail: best-effort column check, upgrade to sqlparse/sqlglot-based
+    parsing if adversarial-input testing (Phase 22) finds a bypass."""
+    if len(plan.steps) > _MAX_PLAN_STEPS:
+        raise PipelineError(f"plan has {len(plan.steps)} steps, exceeds max {_MAX_PLAN_STEPS}")
+
+    final_count = sum(1 for s in plan.steps if s.is_final)
+    if final_count != 1 or not plan.steps[-1].is_final:
+        raise PipelineError(f"plan must have exactly one is_final step, as the last step: {plan.steps!r}")
+
+    seen_tables: set[str] = set()
+    for i, step in enumerate(plan.steps):
+        if step.table not in ALLOWED_SCHEMA:
+            raise PipelineError(f"plan step {i} references unknown table {step.table!r}")
+        combined = f"{step.select} {step.where}".upper()
+        for kw in _FORBIDDEN_SQL_KEYWORDS:
+            if kw in combined:
+                raise PipelineError(f"plan step {i} contains forbidden token {kw!r}: {step!r}")
+        if "SELECT" in combined:
+            raise PipelineError(f"plan step {i} contains a nested SELECT, unsupported by ZCQL: {step!r}")
+        if re.search(r"\w+\(\s*\*\s*\)", combined):
+            raise PipelineError(f"plan step {i} uses '*' inside an aggregate function: {step!r}")
+        if i > 0 and "{PREV}" not in combined:
+            raise PipelineError(f"plan step {i} doesn't chain from the previous step via {{prev}}: {step!r}")
+        if i > 0 and not (ADJACENT_TABLES.get(step.table, set()) & seen_tables):
+            raise PipelineError(
+                f"plan step {i} ({step.table!r}) has no direct FK path from prior tables {sorted(seen_tables)}"
+            )
+        seen_tables.add(step.table)
+
+
+def generate_plan_with_self_consistency(question: str, intent: QueryIntent) -> tuple[QueryPlan, bool]:
+    """Generates the plan twice (each with its own repair retry, see
+    _generate_valid_plan) and diffs (CLAUDE.md: self-consistency check is
+    mandatory, not optional). Returns (plan_to_use, consistent)."""
+    first = second = None
+    first_error = second_error = None
+    try:
+        first = _generate_valid_plan(question, intent)
+    except PipelineError as e:
+        first_error = e
+    try:
+        second = _generate_valid_plan(question, intent)
+    except PipelineError as e:
+        second_error = e
+
+    if first is None and second is None:
+        raise PipelineError(f"both self-consistency plan candidates failed validation: {first_error} / {second_error}")
+    if first is None:
+        return second, False
+    if second is None:
+        return first, False
+
+    consistent = _normalize_plan(first) == _normalize_plan(second)
+    return first, consistent
+
+
+# ---------------------------------------------------------------------------
+# Execute + post-execution sanity check
+# ---------------------------------------------------------------------------
+
+def execute_plan(zcql_service: Any, plan: QueryPlan) -> list[dict[str, Any]]:
+    prev_ids: list[int] | None = None
+    final_rows: list[dict[str, Any]] = []
+    for step in plan.steps:
+        where = step.where.replace("{prev}", zcql_util.in_clause(prev_ids or [-1]))
+        sql = f"SELECT {step.select} FROM {step.table}" + (f" WHERE {where}" if where else "")
+        try:
+            rows = zcql_util.run(zcql_service, sql)
+        except zcql_util.ZcqlError as e:
+            raise PipelineError(f"plan step against {step.table!r} failed: {e} (sql={sql!r})") from e
+        if step.is_final:
+            final_rows = rows
+        else:
+            select_col = step.select.strip()
+            prev_ids = [int(r[select_col]) for r in rows if select_col in r]
+            if not prev_ids:
+                # Nothing matched this step (e.g. no District named that) —
+                # the final step's IN ({prev}) becomes IN (-1), correctly
+                # yielding zero rows instead of silently matching everything.
+                prev_ids = []
+    return final_rows
+
+
+def sanity_check_results(rows: list[dict[str, Any]], intent: QueryIntent) -> float:
+    """Post-execution sanity check (mandatory per CLAUDE.md): validates
+    result shape against expected bounds. Returns a confidence contribution
+    in [0, 1] rather than a bool — an aggregation returning many rows or a
+    plain listing returning zero rows are suspicious, not automatically
+    fatal, so they lower confidence instead of hard-failing the pipeline."""
+    if intent.aggregation in ("count", "sum", "avg") and len(rows) > 1:
+        return 0.5
+    if len(rows) > _MAX_RESULT_ROWS:
+        return 0.5
+    if len(rows) == 0:
+        return 0.7
+    return 1.0
+
+
+# ---------------------------------------------------------------------------
+# Answer generation + entailment check
+# ---------------------------------------------------------------------------
+
+_ANSWER_SYSTEM_PROMPT = (
+    "Answer the user's question in one or two sentences, using ONLY the "
+    "facts present in the provided result rows (JSON). Do not state "
+    "anything not directly supported by the rows. If the rows are empty, "
+    "say no matching records were found."
+)
+
+_ENTAILMENT_SYSTEM_PROMPT = (
+    "Check whether every factual claim in the given answer is directly "
+    "supported by the given result rows (JSON). Respond with ONLY a JSON "
+    'object: {"entailed": true} if every claim is supported, or '
+    '{"entailed": false, "reason": "<short reason>"} otherwise.'
+)
+
+
+def generate_answer(question: str, rows: list[dict[str, Any]]) -> str:
+    rows_json = json.dumps(rows[:50])  # cap prompt size, not a result-count limit
+    return quickml_client.chat(
+        [
+            {"role": "system", "content": _ANSWER_SYSTEM_PROMPT},
+            {"role": "user", "content": f"Question: {question}\nRows: {rows_json}"},
+        ],
+        max_tokens=300, temperature=0.3,
+    ).strip()
+
+
+def entailment_check(answer: str, rows: list[dict[str, Any]]) -> bool:
+    rows_json = json.dumps(rows[:50])
+    raw = quickml_client.chat(
+        [
+            {"role": "system", "content": _ENTAILMENT_SYSTEM_PROMPT},
+            {"role": "user", "content": f"Answer: {answer}\nRows: {rows_json}"},
+        ],
+        max_tokens=150, temperature=0.0,
+    )
+    try:
+        return bool(_extract_json_object(raw).get("entailed", False))
+    except (json.JSONDecodeError, PipelineError):
+        return False  # can't confirm entailment -> treat as failed, not passed
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator
+# ---------------------------------------------------------------------------
+
+def run_query_pipeline(raw_question: str, zcql_service: Any) -> QueryEnvelope:
+    """raw_question is whatever the user typed — English, Kannada, or
+    code-switched. Phase 18: detected+translated to English once here,
+    ahead of Stage 1, per backend_ultraplan.md ("a preprocessing addition
+    in front of /api/query, not a new pipeline") — every stage below still
+    operates in English; only the final answer (and a clarifying question,
+    if one is needed) gets translated back for a Kannada/mixed-language
+    caller, since the user asked for Kannada-in/Kannada-out symmetry."""
+    question, detected_language = language.preprocess_question(raw_question)
+
+    intent = extract_intent(question)
+
+    try:
+        verify_intent(question, intent)
+    except ClarificationNeeded as c:
+        clarifying_question = language.postprocess_answer(c.question, detected_language)
+        return QueryEnvelope(
+            response_type="text",
+            data={"clarifying_question": clarifying_question, "language": detected_language},
+            confidence_score=0.0,
+        )
+
+    plan, consistent = generate_plan_with_self_consistency(question, intent)
+    validate_plan(plan)  # re-validate the chosen candidate, not just both branches above
+
+    rows = execute_plan(zcql_service, plan)
+    sanity_confidence = sanity_check_results(rows, intent)
+
+    answer = generate_answer(question, rows)
+    entailed = entailment_check(answer, rows)
+    if not entailed:
+        # One retry with an explicit "stick to the rows" nudge, per
+        # CLAUDE.md's entailment-must-pass-before-reaching-user rule.
+        answer = generate_answer(
+            question + " (Answer using ONLY the exact values in the rows, nothing else.)", rows,
+        )
+        entailed = entailment_check(answer, rows)
+
+    answer = language.postprocess_answer(answer, detected_language)
+
+    confidence = sanity_confidence * (1.0 if consistent else 0.6) * (1.0 if entailed else 0.4)
+
+    cited_case_ids = sorted({
+        int(r["CseMasterID"]) for r in rows if "CseMasterID" in r and str(r["CseMasterID"]).isdigit()
+    })
+
+    return QueryEnvelope(
+        response_type="card" if rows else "text",
+        data={"answer": answer, "rows": rows[:_MAX_RESULT_ROWS], "language": detected_language},
+        cited_case_ids=cited_case_ids,
+        generated_sql=render_plan_as_sql(plan),
+        confidence_score=round(confidence, 3),
+    )

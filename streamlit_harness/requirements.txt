@@ -2,3 +2,4 @@ streamlit
 zcatalyst-sdk==1.4.0
 python-dotenv
 pandas
+requests
