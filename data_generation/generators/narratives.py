@@ -249,3 +249,40 @@ def build_brief_facts(
         offence_lower=subhead_name.lower(), place_type=place_type,
         district=district, case_category=case_category,
     )
+
+
+_PARAPHRASE_SYSTEM_PROMPT = (
+    "Rewrite the following police case summary in different wording. "
+    "Preserve every specific fact exactly: place, district, weapon, gang "
+    "name, number of accused, drug name and quantity, and case category. "
+    "Keep all numbers as digits, not spelled out (write '5', not 'Five'). "
+    "Never substitute a legal offence term for a different one — if the "
+    "text says 'dacoity', keep 'dacoity'; do not change it to 'robbery' or "
+    "any other offence name, they are legally distinct. Do not add or "
+    "remove any fact, name, or number. Return only the rewritten "
+    "paragraph, no preamble."
+)
+
+
+def paraphrase_brief_facts(text: str, *, enable_thinking: bool = False) -> str:
+    """QuickML paraphrase pass over template-generated BriefFacts text —
+    varies phrasing only, never invents new facts (CLAUDE.md: synthetic
+    content must stay fact-faithful to what generation actually decided).
+    Falls back to the template text unchanged on any QuickML failure (rate
+    limit, network, malformed response) — a paraphrase failure mid-run
+    isn't fatal to a 2000-row generation pass, but it's logged explicitly,
+    never silently swallowed (CLAUDE.md's no-silent-failure rule)."""
+    from data_generation import quickml_client
+
+    try:
+        result = quickml_client.chat(
+            [
+                {"role": "system", "content": _PARAPHRASE_SYSTEM_PROMPT},
+                {"role": "user", "content": text},
+            ],
+            max_tokens=300, temperature=0.6, enable_thinking=enable_thinking,
+        ).strip()
+        return result or text
+    except Exception as e:  # noqa: BLE001 - explicit logged fallback, not a swallow
+        print(f"[narratives] QuickML paraphrase failed, keeping template text: {e}")
+        return text

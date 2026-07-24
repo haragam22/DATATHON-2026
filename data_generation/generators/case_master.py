@@ -144,6 +144,7 @@ def generate_case_master(
             subhead["CrimeHeadName"], place_type, district["DistrictName"],
             category["LookupValue"], plan, random,
         )
+        brief_facts = narratives.paraphrase_brief_facts(brief_facts)
 
         case_master_id = next(ids)
         case_plans[case_master_id] = plan

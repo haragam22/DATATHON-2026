@@ -29,6 +29,16 @@ def get_app():
             f"Missing env vars: {', '.join(missing)}. Copy .env.example to .env and fill in."
         )
 
+    # zcatalyst_sdk hardcodes ACCOUNTS_URL to the placeholder
+    # https://accounts.localzoho.com unless this exact env var is set
+    # (confirmed in the installed package's _constants.py — not documented
+    # anywhere) — every RefreshTokenCredential call silently tries to reach
+    # a nonexistent host and hangs/SSL-fails without it.
+    os.environ.setdefault(
+        "X_ZOHO_CATALYST_ACCOUNTS_URL",
+        os.environ.get("CATALYST_ACCOUNTS_URL", "https://accounts.zoho.in"),
+    )
+
     cred = credentials.RefreshTokenCredential({
         "refresh_token": os.environ["CATALYST_REFRESH_TOKEN"],
         "client_id": os.environ["CATALYST_CLIENT_ID"],
@@ -37,7 +47,11 @@ def get_app():
     options = ICatalystOptions(
         project_id=os.environ["CATALYST_PROJECT_ID"],
         project_key=os.environ["CATALYST_PROJECT_KEY"],
-        project_domain="https://api.catalyst.zoho.com",
+        # This project's data center is .in (confirmed via accounts.zoho.in
+        # token exchange working, api.catalyst.zoho.in in QUICKML_ENDPOINT_URL)
+        # — hardcoded .com here would silently fail auth. Overridable via env
+        # in case a future project lands on a different DC.
+        project_domain=os.environ.get("CATALYST_PROJECT_DOMAIN", "https://api.catalyst.zoho.in"),
         environment=os.environ["CATALYST_ENVIRONMENT"],
     )
     return zcatalyst_sdk.initialize_app(credential=cred, options=options, name="StreamlitHarness")
