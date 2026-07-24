@@ -1,4 +1,19 @@
 import logging
+import os
+
+# Load functions/datathon_2026_function/.env (gitignored — QuickML/OAuth
+# secrets, kept out of catalyst-config.json since that file is tracked and
+# this repo is about to go public). Must run before `import zcatalyst_sdk`:
+# the SDK reads CATALYST_ACCOUNTS_URL from the environment at import time.
+_env_path = os.path.join(os.path.dirname(__file__), ".env")
+if os.path.exists(_env_path):
+    with open(_env_path) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _key, _, _value = _line.partition("=")
+                os.environ.setdefault(_key.strip(), _value.strip())
+
 from flask import Request, make_response, jsonify
 import zcatalyst_sdk
 

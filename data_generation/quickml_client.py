@@ -25,7 +25,10 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", "streamlit_harness", "
 # accounts.zoho.in matches the .in data center implied by the confirmed
 # QUICKML_ENDPOINT_URL host (api.catalyst.zoho.in) — Zoho OAuth token
 # endpoints are data-center-scoped, not a global URL.
-_ACCOUNTS_URL = os.environ.get("CATALYST_ACCOUNTS_URL", "https://accounts.zoho.in/oauth/v2/token")
+# NOT CATALYST_ACCOUNTS_URL — streamlit_harness/.env sets that to a bare
+# domain ("https://accounts.zoho.in") for zcatalyst_sdk's own import-time
+# read, which silently dropped "/oauth/v2/token" here and broke token refresh.
+_ACCOUNTS_URL = os.environ.get("QUICKML_OAUTH_TOKEN_URL", "https://accounts.zoho.in/oauth/v2/token")
 _MODEL = os.environ.get("QUICKML_MODEL", "crm-di-glm47b_30b_it")
 
 _token_cache: dict[str, float | str] = {"access_token": "", "expires_at": 0.0}

@@ -178,9 +178,26 @@ _PLAN_SYSTEM_PROMPT = (
     "- To filter across tables, write ONE step per table, in dependency "
     "order (the table with the literal filter value first). Every step "
     "after the first should reference the placeholder {prev} in its where "
-    "clause to mean 'the ROWID values returned by the previous step', e.g. "
-    "\"DistrictID_FK IN ({prev})\". The step selecting {prev}'s source "
-    "should select ROWID.\n"
+    "clause to mean 'the ROWID values returned by the immediately preceding "
+    "step', e.g. \"DistrictID_FK IN ({prev})\". The step selecting {prev}'s "
+    "source should select ROWID.\n"
+    "- If the final step must combine filters from TWO SEPARATE, unrelated "
+    "chains (e.g. filter by district AND by a specific offence name), do "
+    "NOT try to fit both into one {prev} — write each chain as its own "
+    "steps, then reference each chain's last step by its 0-based index: "
+    "{prev0} means step 0's results, {prev1} means step 1's results, etc. "
+    "{prev} alone always means the step directly above. Worked example for "
+    "\"murder cases in Ballari district\":\n"
+    '{"steps": ['
+    '{"table": "District", "select": "ROWID", '
+    '"where": "DistrictName = \'Ballari\'", "is_final": false}, '
+    '{"table": "Unit", "select": "ROWID", '
+    '"where": "DistrictID_FK IN ({prev})", "is_final": false}, '
+    '{"table": "CrimeSubHead", "select": "ROWID", '
+    '"where": "CrimeHeadName = \'Murder\'", "is_final": false}, '
+    '{"table": "CaseMaster", "select": "COUNT(CseMasterID)", '
+    '"where": "PoliceStationID_FK IN ({prev1}) AND CrimeMinorHeadID_FK IN ({prev2})", "is_final": true}'
+    "]}\n"
     "- Only these table pairs may be chained this way (the FK actually "
     "points from the first to the second):\n\n"
     f"{_RELATIONSHIPS_TEXT}\n\n"
@@ -278,7 +295,13 @@ def validate_plan(plan: QueryPlan) -> None:
     if final_count != 1 or not plan.steps[-1].is_final:
         raise PipelineError(f"plan must have exactly one is_final step, as the last step: {plan.steps!r}")
 
-    seen_tables: set[str] = set()
+    # A step is either a fresh anchor (a literal-value filter, no {prev} —
+    # legal at ANY position, since the final step may fan in several
+    # independent chains that each start fresh) or a continuation (must
+    # name which specific prior non-final step it continues via {prev} or
+    # {prevN}, and must be FK-adjacent to THAT step's table specifically —
+    # not just "any table seen so far", which would let unrelated chains
+    # falsely validate each other).
     for i, step in enumerate(plan.steps):
         if step.table not in ALLOWED_SCHEMA:
             raise PipelineError(f"plan step {i} references unknown table {step.table!r}")
@@ -290,13 +313,19 @@ def validate_plan(plan: QueryPlan) -> None:
             raise PipelineError(f"plan step {i} contains a nested SELECT, unsupported by ZCQL: {step!r}")
         if re.search(r"\w+\(\s*\*\s*\)", combined):
             raise PipelineError(f"plan step {i} uses '*' inside an aggregate function: {step!r}")
-        if i > 0 and "{PREV}" not in combined:
-            raise PipelineError(f"plan step {i} doesn't chain from the previous step via {{prev}}: {step!r}")
-        if i > 0 and not (ADJACENT_TABLES.get(step.table, set()) & seen_tables):
-            raise PipelineError(
-                f"plan step {i} ({step.table!r}) has no direct FK path from prior tables {sorted(seen_tables)}"
-            )
-        seen_tables.add(step.table)
+
+        refs = re.findall(r"\{PREV(\d*)\}", combined)
+        if not refs:
+            continue  # fresh anchor step — no prior-step dependency to check
+        for raw_ref in refs:
+            ref_i = i - 1 if raw_ref == "" else int(raw_ref)
+            if ref_i < 0 or ref_i >= i or plan.steps[ref_i].is_final:
+                raise PipelineError(f"plan step {i} references invalid prior step {{prev{raw_ref}}}: {step!r}")
+            ref_table = plan.steps[ref_i].table
+            if ref_table not in ADJACENT_TABLES.get(step.table, set()):
+                raise PipelineError(
+                    f"plan step {i} ({step.table!r}) has no direct FK path from step {ref_i} ({ref_table!r}): {step!r}"
+                )
 
 
 def generate_plan_with_self_consistency(question: str, intent: QueryIntent) -> tuple[QueryPlan, bool]:
@@ -330,10 +359,23 @@ def generate_plan_with_self_consistency(question: str, intent: QueryIntent) -> t
 # ---------------------------------------------------------------------------
 
 def execute_plan(zcql_service: Any, plan: QueryPlan) -> list[dict[str, Any]]:
-    prev_ids: list[int] | None = None
+    # step_ids[i] holds step i's resolved ID list once it runs (only
+    # populated for non-final steps). {prev} means "the immediately
+    # preceding step"; {prevN} references step N by index directly — needed
+    # when the final step must combine results from two independent chains
+    # (e.g. a district->unit chain and an unrelated offence-name chain) that
+    # a single overwritten {prev} variable can't hold at once.
+    step_ids: dict[int, list[int]] = {}
     final_rows: list[dict[str, Any]] = []
-    for step in plan.steps:
-        where = step.where.replace("{prev}", zcql_util.in_clause(prev_ids or [-1]))
+    last_non_final: list[int] = []
+    for i, step in enumerate(plan.steps):
+        where = re.sub(
+            r"\{prev(\d*)\}",
+            lambda m: zcql_util.in_clause(
+                (step_ids.get(int(m.group(1)), last_non_final) if m.group(1) else last_non_final) or [-1]
+            ),
+            step.where,
+        )
         sql = f"SELECT {step.select} FROM {step.table}" + (f" WHERE {where}" if where else "")
         try:
             rows = zcql_util.run(zcql_service, sql)
@@ -343,12 +385,12 @@ def execute_plan(zcql_service: Any, plan: QueryPlan) -> list[dict[str, Any]]:
             final_rows = rows
         else:
             select_col = step.select.strip()
-            prev_ids = [int(r[select_col]) for r in rows if select_col in r]
-            if not prev_ids:
-                # Nothing matched this step (e.g. no District named that) —
-                # the final step's IN ({prev}) becomes IN (-1), correctly
-                # yielding zero rows instead of silently matching everything.
-                prev_ids = []
+            ids = [int(r[select_col]) for r in rows if select_col in r]
+            # Nothing matched this step (e.g. no District named that) — a
+            # downstream IN ({prevN}) becomes IN (-1), correctly yielding
+            # zero rows instead of silently matching everything.
+            step_ids[i] = ids
+            last_non_final = ids
     return final_rows
 
 
