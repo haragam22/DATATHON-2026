@@ -213,12 +213,21 @@ _PLAN_SYSTEM_PROMPT = (
     "example for \"cases in Ballari district\":\n"
     '{"steps": ['
     '{"table": "District", "select": "ROWID", '
-    '"where": "DistrictName = \'Ballari\'", "is_final": false}, '
+    '"where": "DistrictName LIKE \'%Ballari%\'", "is_final": false}, '
     '{"table": "Unit", "select": "ROWID", '
     '"where": "DistrictID_FK IN ({prev})", "is_final": false}, '
     '{"table": "CaseMaster", "select": "CseMasterID", '
     '"where": "PoliceStationID_FK IN ({prev})", "is_final": true}'
     "]}\n"
+    "- CRITICAL FK TYPE RULE: All columns ending in _FK or ID (e.g. "
+    "DistrictID_FK, PoliceStationID_FK, StateID_FK, CrimeMinorHeadID_FK, ROWID) "
+    "are BIGINT INTEGERS. NEVER compare an _FK or ID column to a string literal "
+    "(e.g. NEVER write DistrictID_FK = 'Bengaluru' or DistrictID_FK LIKE '%bengaluru%'). "
+    "String filters must ONLY target string columns (e.g. District.DistrictName, "
+    "CrimeSubHead.CrimeHeadName, Unit.UnitName).\n"
+    "- For district/city queries (e.g. 'Bengaluru', 'Mysuru'), filter District "
+    "table using DistrictName LIKE '%bengaluru%' (or DistrictName LIKE '%Bengaluru%') "
+    "in step 0, then filter Unit on DistrictID_FK IN ({prev}) in step 1.\n"
     "Specific offence names (Murder, Robbery, Theft, NDPS, Dacoity, etc.) "
     "are in CrimeSubHead.CrimeHeadName — NOT CrimeHead.CrimeGroupName, "
     "which only holds broad categories like 'Crimes Against Body'. A "
@@ -314,6 +323,20 @@ def validate_plan(plan: QueryPlan) -> None:
         if re.search(r"\w+\(\s*\*\s*\)", combined):
             raise PipelineError(f"plan step {i} uses '*' inside an aggregate function: {step!r}")
 
+        # Guard: Check for invalid comparisons between ID/FK columns and string literals.
+        # Foreign key & ID columns in ZCQL schema are BIGINT integers.
+        # Comparing an ID/FK column (e.g. DistrictID_FK, PoliceStationID_FK) to a quoted string
+        # (e.g. DistrictID_FK = 'Bengaluru') causes ZCQL status 400 error.
+        fk_match = re.search(r"\b(\w*(?:ID|_FK))\s*(?:=|LIKE|IN|\!=|<|>)\s*['\"]([^'\"]*)['\"]", step.where, re.IGNORECASE)
+        if fk_match:
+            col_name, str_val = fk_match.group(1), fk_match.group(2)
+            if not str_val.isdigit():
+                raise PipelineError(
+                    f"plan step {i} ({step.table}) compares integer ID/FK column {col_name!r} to string literal {str_val!r}. "
+                    f"Foreign key and ID columns are numeric BIGINTs. String filters must target string text columns "
+                    f"(e.g. District.DistrictName, CrimeSubHead.CrimeHeadName, Unit.UnitName), never ID or _FK columns."
+                )
+
         refs = re.findall(r"\{PREV(\d*)\}", combined)
         if not refs:
             continue  # fresh anchor step — no prior-step dependency to check
@@ -372,7 +395,7 @@ def execute_plan(zcql_service: Any, plan: QueryPlan) -> list[dict[str, Any]]:
         where = re.sub(
             r"\{prev(\d*)\}",
             lambda m: zcql_util.in_clause(
-                (step_ids.get(int(m.group(1)), last_non_final) if m.group(1) else last_non_final) or [-1]
+                (step_ids.get(int(m.group(1)), last_non_final) if m.group(1) else last_non_final) or [0]
             ),
             step.where,
         )
@@ -386,9 +409,10 @@ def execute_plan(zcql_service: Any, plan: QueryPlan) -> list[dict[str, Any]]:
         else:
             select_col = step.select.strip()
             ids = [int(r[select_col]) for r in rows if select_col in r]
-            # Nothing matched this step (e.g. no District named that) — a
-            # downstream IN ({prevN}) becomes IN (-1), correctly yielding
-            # zero rows instead of silently matching everything.
+            # If an intermediate step (e.g. District filter) matches 0 records,
+            # downstream dependent steps cannot match anything — short-circuit early.
+            if not ids:
+                return []
             step_ids[i] = ids
             last_non_final = ids
     return final_rows

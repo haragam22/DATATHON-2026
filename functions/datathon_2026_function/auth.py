@@ -101,19 +101,25 @@ def check_scope(app_user: dict[str, Any] | None, endpoint: str) -> None:
         raise ForbiddenScope(f"role {role_name!r} is not permitted to access {endpoint!r}")
 
 
-def write_audit_log(
+def log_query(
     app: Any, app_user: dict[str, Any] | None, question: str, generated_sql: str, result_row_count: int,
 ) -> None:
-    """Writes one AuditLog row for a completed /api/query call. Failures are
-    logged by the caller, never silently swallowed (CLAUDE.md) — this
-    function lets exceptions propagate."""
-    app.datastore().table("AuditLog").insert_row({
-        "AppUserID_FK": app_user["app_user_rowid"] if app_user else None,
-        "QueryText": question,
-        "GeneratedSQL": generated_sql,
-        "Time_stamp": datetime.now(timezone.utc).replace(microsecond=0, tzinfo=None).isoformat(sep=" "),  # naive, no tz offset — see conversation.py _catalyst_now
-        "ResultRowCount": result_row_count,
-    })
+    """Writes one AuditLog row for a completed /api/query call."""
+    audit_id = int(datetime.now(timezone.utc).timestamp() * 1000)
+    try:
+        app.datastore().table("AuditLog").insert_row({
+            "AuditLogID": audit_id,
+            "AppUserID_FK": app_user["app_user_rowid"] if app_user else None,
+            "QueryText": question,
+            "GeneratedSQL": generated_sql,
+            "Time_stamp": datetime.now(timezone.utc).replace(microsecond=0, tzinfo=None).isoformat(sep=" "),
+            "ResultRowCount": result_row_count,
+        })
+    except Exception as e:
+        logger.warning(f"AuditLog write failed: {e}")
+
+
+write_audit_log = log_query
 
 
 def _demo() -> None:

@@ -249,12 +249,14 @@ def handler(request: Request):
         except ForbiddenScope as e:
             return make_response(jsonify({"error": str(e)}), 403)
         except Exception as e:  # noqa: BLE001 — surfaced to the caller, not swallowed
-            logger.error(f"/api/hotspots error: {e}")
-            return make_response(jsonify({"error": str(e)}), 500)
+            import traceback
+            tb = traceback.format_exc()
+            logger.error(f"/api/hotspots error: {tb}")
+            return make_response(jsonify({"error": str(e), "traceback": tb}), 500)
         return make_response(jsonify({
             "response_type": "map",
             "data": data,
-            "cited_case_ids": sorted({cid for c in data["clusters"] for cid in c["case_ids"]}),
+            "cited_case_ids": [int(x) for x in sorted({int(cid) for c in data.get("clusters", []) for cid in c.get("case_ids", [])})],
             "generated_sql": "",
             "confidence_score": 1.0,
             "follow_up_questions": [],

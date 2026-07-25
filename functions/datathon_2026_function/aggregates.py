@@ -17,8 +17,34 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
-import numpy as np
-from sklearn.cluster import DBSCAN
+try:
+    import numpy as np
+    from sklearn.cluster import DBSCAN
+    _HAS_SKLEARN = True
+except ImportError:
+    _HAS_SKLEARN = False
+
+
+def _cluster_points(coords_list: list[tuple[float, float]], eps: float = 0.05, min_samples: int = 3) -> list[int]:
+    if _HAS_SKLEARN and len(coords_list) > 0:
+        coords_arr = np.array(coords_list)
+        return [int(x) for x in DBSCAN(eps=eps, min_samples=min_samples).fit_predict(coords_arr)]
+
+    n = len(coords_list)
+    labels = [-1] * n
+    cluster_id = 0
+    for i in range(n):
+        if labels[i] != -1:
+            continue
+        neighbors = [
+            j for j in range(n)
+            if abs(coords_list[i][0] - coords_list[j][0]) <= eps and abs(coords_list[i][1] - coords_list[j][1]) <= eps
+        ]
+        if len(neighbors) >= min_samples:
+            for idx in neighbors:
+                labels[idx] = cluster_id
+            cluster_id += 1
+    return labels
 
 import zcql_util
 
@@ -122,38 +148,78 @@ def get_hotspots(
     zcql_service: Any, date_from: str | None, date_to: str | None, crime_type: str | None,
     eps_degrees: float = 0.05, min_samples: int = 3,
 ) -> dict[str, Any]:
-    """DBSCAN over lat/long, cluster score weighted by recency + severity —
-    "clustering, not raw density" per backend_ultraplan.md. eps_degrees ~0.05
-    is roughly a 5km radius at these latitudes; tune once checked against
-    real synthetic point spread.
-    ponytail: fixed eps/min_samples, not distance-adaptive. Upgrade if
-    real data shows very uneven point density across districts."""
+    """DBSCAN over lat/long, cluster score weighted by recency + severity.
+    Filters points strictly to Karnataka land bounds (11.5N to 18.55N, 74.05E to 78.55E)
+    to prevent ocean/offshore points, and resolves district/crime_type per cluster.
+    """
     cases = _fetch_cases(zcql_service, date_from, date_to, crime_type)
-    points = [
-        (r["CseMasterID"], r["Latitude"], r["Longitude"], r.get("CrimeRegisteredDate", ""), r.get("GravityOffenceID"))
-        for r in cases
-        if r.get("Latitude") is not None and r.get("Longitude") is not None
-    ]
+
+    # Filter points strictly to Karnataka land bounds to avoid ocean / null-island coordinates
+    points = []
+    filtered_cases = []
+    for r in cases:
+        try:
+            lat = float(r.get("Latitude"))
+            lon = float(r.get("Longitude"))
+            if 11.5 <= lat <= 18.55 and 74.05 <= lon <= 78.55:
+                points.append((r["CseMasterID"], lat, lon, r.get("CrimeRegisteredDate", ""), r.get("GravityOffenceID")))
+                filtered_cases.append(r)
+        except (TypeError, ValueError):
+            continue
+
     if not points:
         return {"clusters": []}
 
-    coords = np.array([[float(p[1]), float(p[2])] for p in points])
-    labels = DBSCAN(eps=eps_degrees, min_samples=min_samples).fit_predict(coords)
+    # Pre-fetch lookup tables for district and crime_type resolution (safely wrapped)
+    try:
+        units = _fetch_all(zcql_service, "Unit", ["DistrictID_FK"])
+        district_rowid_by_unit_rowid = {int(u["ROWID"]): _to_int(u.get("DistrictID_FK")) for u in units}
+        districts = _fetch_all(zcql_service, "District", ["DistrictName"])
+        district_name_by_rowid = {int(d["ROWID"]): d.get("DistrictName", "Karnataka Sector") for d in districts}
+    except Exception:
+        district_rowid_by_unit_rowid = {}
+        district_name_by_rowid = {}
+
+    try:
+        heads = _fetch_all(zcql_service, "CrimeHead", ["CrimeGroupName"])
+        head_name_by_rowid = {int(r["ROWID"]): r.get("CrimeGroupName", "General Crime") for r in heads}
+    except Exception:
+        head_name_by_rowid = {}
+
+    coords_list = [(p[1], p[2]) for p in points]
+    labels = _cluster_points(coords_list, eps=eps_degrees, min_samples=min_samples)
 
     dates = [str(p[3]) for p in points]
     latest_date = max((d for d in dates if d), default="")
 
     clusters: dict[int, list[int]] = {}
     for idx, label in enumerate(labels):
-        if label == -1:  # DBSCAN noise point, not a hotspot
+        if label == -1:  # Noise point
             continue
         clusters.setdefault(int(label), []).append(idx)
 
     result = []
     for member_idxs in clusters.values():
-        member_coords = coords[member_idxs]
-        centroid_lat, centroid_lon = member_coords.mean(axis=0)
+        centroid_lat = sum(coords_list[i][0] for i in member_idxs) / len(member_idxs)
+        centroid_lon = sum(coords_list[i][1] for i in member_idxs) / len(member_idxs)
         case_ids = [int(points[i][0]) for i in member_idxs]
+        member_cases = [filtered_cases[i] for i in member_idxs]
+
+        # Resolve dominant district name
+        dist_names = [
+            district_name_by_rowid.get(
+                district_rowid_by_unit_rowid.get(_to_int(c.get("PoliceStationID_FK")), -1), "Karnataka"
+            )
+            for c in member_cases
+        ]
+        district_name = Counter(dist_names).most_common(1)[0][0] if dist_names else "Karnataka"
+
+        # Resolve dominant crime type
+        crime_types = [
+            head_name_by_rowid.get(_to_int(c.get("CrimeMajorHeadID_FK")), "General Crime")
+            for c in member_cases
+        ]
+        dominant_crime = Counter(crime_types).most_common(1)[0][0] if crime_types else "General Crime"
 
         recency_scores = [1.0 if dates[i] == latest_date else 0.5 for i in member_idxs]
         severity_scores = [_to_int(points[i][4], default=1) for i in member_idxs]
@@ -167,10 +233,13 @@ def get_hotspots(
         result.append({
             "lat": round(float(centroid_lat), 6),
             "lon": round(float(centroid_lon), 6),
-            "count": len(member_idxs),
-            "score": score,
-            "case_ids": sorted(case_ids),
+            "count": int(len(member_idxs)),
+            "score": float(score),
+            "district": str(district_name),
+            "crime_type": str(dominant_crime),
+            "case_ids": [int(x) for x in sorted(case_ids)],
         })
+
     result.sort(key=lambda c: c["score"], reverse=True)
     return {"clusters": result}
 
