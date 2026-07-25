@@ -1,0 +1,34 @@
+/* ── Role Selector ── */
+
+.role-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px var(--space-2);
+  background: var(--ink-800);
+  border: 1px solid var(--line-700);
+  border-radius: var(--radius-card);
+}
+
+.role-selector__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-shadow: 0 0 6px currentColor;
+  flex-shrink: 0;
+}
+
+.role-selector__select {
+  background: transparent;
+  border: none;
+  color: var(--text-100);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  outline: none;
+  padding: 0;
+}
+
+.role-selector__select option {
+  background: var(--ink-900);
+  color: var(--text-100);
+}

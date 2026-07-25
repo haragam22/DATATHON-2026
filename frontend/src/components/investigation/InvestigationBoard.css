@@ -1,0 +1,152 @@
+/* ── Investigation Board ── */
+
+.investigation-board {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 480px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  position: relative;
+  background: var(--ink-950);
+}
+
+/* Toolbar header */
+.investigation-board__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background: var(--ink-900);
+  border-bottom: 1px solid var(--line-700);
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  z-index: 10;
+}
+
+.investigation-board__search-form {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.investigation-board__input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.investigation-board__search-icon {
+  position: absolute;
+  left: var(--space-2);
+  color: var(--text-400);
+  pointer-events: none;
+}
+
+.investigation-board__input {
+  padding: 4px 8px 4px 28px;
+  width: 130px;
+  background: var(--ink-800);
+  border: 1px solid var(--line-700);
+  border-radius: var(--radius-card);
+  color: var(--text-100);
+  font-size: var(--text-xs);
+}
+
+.investigation-board__input:focus {
+  border-color: var(--ksp-blue);
+  outline: none;
+}
+
+/* Legend */
+.investigation-board__legend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.investigation-board__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.investigation-board__legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  background: transparent;
+}
+
+.investigation-board__legend-dot--glow {
+  box-shadow: 0 0 6px rgba(198, 162, 77, 0.6);
+}
+
+/* Canvas container */
+.investigation-board__canvas-container {
+  flex: 1;
+  width: 100%;
+  min-height: 400px;
+  position: relative;
+  background: var(--ink-950);
+}
+
+/* Floating overlay states */
+.investigation-board__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  z-index: 5;
+  background: rgba(10, 15, 28, 0.85);
+}
+
+/* Title bar */
+.investigation-board__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Zoom / pan control toolbar */
+.investigation-board__controls {
+  position: absolute;
+  bottom: var(--space-3);
+  right: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px;
+  background: var(--ink-800);
+  border: 1px solid var(--line-700);
+  border-radius: var(--radius-card);
+  z-index: 10;
+}
+
+/* Detail sidecard */
+.investigation-board__detail {
+  position: absolute;
+  bottom: var(--space-3);
+  left: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--ink-800);
+  border: 1px solid var(--ksp-gold);
+  border-radius: var(--radius-card);
+  z-index: 10;
+  max-width: 300px;
+  box-shadow: var(--shadow-float);
+}
+
+.investigation-board__detail-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+

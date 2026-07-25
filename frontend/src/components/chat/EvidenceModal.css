@@ -1,0 +1,125 @@
+/* ── Evidence Modal CSS ── */
+
+.evidence-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 15, 28, 0.85);
+  backdrop-filter: blur(4px);
+  padding: var(--space-4);
+}
+
+.evidence-modal {
+  width: 100%;
+  max-width: 680px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--ink-900);
+  border: 1px solid var(--line-700);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  box-shadow: var(--shadow-float);
+}
+
+.evidence-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background: var(--ink-900);
+  border-bottom: 1px solid var(--line-700);
+}
+
+.evidence-modal__viewport {
+  position: relative;
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--ink-950);
+}
+
+/* Watermark banner across preview */
+.evidence-modal__watermark-banner {
+  position: absolute;
+  top: var(--space-2);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  padding: 2px var(--space-3);
+  background: rgba(184, 73, 58, 0.2);
+  border: 1px solid var(--signal-red);
+  color: var(--signal-red);
+  border-radius: var(--radius-chip);
+  letter-spacing: 0.05em;
+  pointer-events: none;
+}
+
+.evidence-modal__media-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6) var(--space-4);
+}
+
+.evidence-modal__img {
+  max-width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--line-700);
+}
+
+.evidence-modal__video-wrapper {
+  width: 100%;
+  max-width: 580px;
+}
+
+.evidence-modal__video {
+  width: 100%;
+  border-radius: var(--radius-card);
+  outline: none;
+  background: #000;
+}
+
+.evidence-modal__audio-wrapper,
+.evidence-modal__doc-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  text-align: center;
+}
+
+.evidence-modal__audio {
+  margin-top: var(--space-3);
+  width: 100%;
+  max-width: 400px;
+}
+
+.evidence-modal__footer {
+  padding: var(--space-4);
+  background: var(--ink-900);
+  border-top: 1px solid var(--line-700);
+}
+
+.evidence-modal__meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.evidence-modal__meta-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}

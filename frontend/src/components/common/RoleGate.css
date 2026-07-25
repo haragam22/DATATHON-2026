@@ -1,0 +1,36 @@
+/* ── RoleGate — RBAC Dimmed/Locked Treatment ── */
+
+.role-gate--locked {
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+}
+
+.role-gate__content {
+  opacity: 0.45;
+  filter: grayscale(40%);
+  pointer-events: none;
+}
+
+.role-gate__lock-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 15, 28, 0.4);
+  backdrop-filter: blur(1px);
+}
+
+.role-gate__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--ink-800);
+  border: 1px solid var(--signal-amber);
+  border-radius: var(--radius-card);
+  color: var(--text-100);
+  box-shadow: var(--shadow-float);
+}

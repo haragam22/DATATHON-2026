@@ -1,0 +1,485 @@
+/* ============================================================
+   KSP CRIME INTELLIGENCE — Design Token System
+   Source: docs/design.md
+   Dark-first. Light theme = token swap only (see below).
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+/* ------------------------------------------------------------
+   COLOR TOKENS — dark command-center base
+   ------------------------------------------------------------ */
+:root {
+  /* Backgrounds / surfaces */
+  --ink-950: #0A0F1C;   /* App background */
+  --ink-900: #0F1626;   /* Base panel surface */
+  --ink-800: #161F35;   /* Raised surface — cards, sidecars */
+  --ink-700: #1F2A45;   /* Hover/active surface, input fields */
+
+  /* Borders */
+  --line-700: #2B3757;  /* Hairline borders, dividers */
+
+  /* Text */
+  --text-100: #EAEEF7;  /* Primary text */
+  --text-400: #96A2C0;  /* Secondary text, labels, captions */
+  --text-600: #5C6890;  /* Disabled/tertiary text */
+
+  /* Brand accents */
+  --ksp-blue: #2C5AA0;  /* Primary accent — links, buttons, active nav, chart series 1 */
+  --ksp-gold: #C6A24D;  /* Stamp/seal, citations, key highlights — use sparingly */
+
+  /* Signals */
+  --signal-red:   #B8493A;  /* Errors, high-risk, low confidence */
+  --signal-amber: #C68A3D;  /* Medium risk/confidence, warnings */
+  --signal-green: #4C8067;  /* High confidence, verified, success */
+
+  /* Semantic aliases */
+  --color-bg:          var(--ink-950);
+  --color-surface:     var(--ink-900);
+  --color-surface-raised: var(--ink-800);
+  --color-surface-hover:  var(--ink-700);
+  --color-border:      var(--line-700);
+  --color-text:        var(--text-100);
+  --color-text-muted:  var(--text-400);
+  --color-text-faint:  var(--text-600);
+  --color-accent:      var(--ksp-blue);
+  --color-accent-alt:  var(--ksp-gold);
+
+  /* Floating element shadow — ink-950 at 40%, soft, low-opacity */
+  --shadow-float: 0 4px 24px rgba(10, 15, 28, 0.55), 0 1px 4px rgba(10, 15, 28, 0.4);
+
+  /* ------------------------------------------------------------
+     TYPOGRAPHY TOKENS
+     UI/body: IBM Plex Sans 400/500/600
+     Data/code/citations: IBM Plex Mono
+     ------------------------------------------------------------ */
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+
+  /* Type scale (px at 1x) */
+  --text-xs:   12px;  /* caption, mono data */
+  --text-sm:   14px;  /* body/UI default */
+  --text-base: 16px;  /* emphasized body */
+  --text-lg:   20px;  /* card titles */
+  --text-xl:   26px;  /* section headers */
+  --text-2xl:  34px;  /* dashboard hero numbers — used rarely */
+
+  /* Line heights */
+  --leading-tight:  1.2;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+
+  /* Letter spacing */
+  --tracking-label: 0.01em;  /* section headers / tab labels */
+  --tracking-tight: -0.01em;
+
+  /* Font weights */
+  --weight-regular: 400;
+  --weight-medium:  500;
+  --weight-semibold: 600;
+
+  /* ------------------------------------------------------------
+     SPACING SCALE (px)
+     4 / 8 / 12 / 16 / 24 / 32 / 48 — no arbitrary values
+     ------------------------------------------------------------ */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-12: 48px;
+
+  /* ------------------------------------------------------------
+     SHAPE
+     Small, consistent. Cards 4px, chips/badges 2px.
+     Never 16px+ (consumer-app register, wrong for this product).
+     ------------------------------------------------------------ */
+  --radius-card:  4px;
+  --radius-chip:  2px;
+  --radius-input: 4px;
+
+  /* ------------------------------------------------------------
+     ICONOGRAPHY
+     Line icons, 1.5px stroke (Lucide)
+     ------------------------------------------------------------ */
+  --icon-stroke: 1.5;
+
+  /* ------------------------------------------------------------
+     TRANSITION DURATIONS (from design.md Motion section)
+     ------------------------------------------------------------ */
+  --duration-stamp:   120ms;  /* stamp verified animation */
+  --duration-panel:   150ms;  /* explainability/sidecar expand */
+  --duration-message: 100ms;  /* new chat message fade+slide */
+  --ease-out: cubic-bezier(0.0, 0.0, 0.2, 1);
+}
+
+/* ------------------------------------------------------------
+   OPTIONAL LIGHT THEME (station daytime use)
+   Token swap only — not a separate design pass.
+   ------------------------------------------------------------ */
+[data-theme="light"] {
+  --color-bg:          #F5F3ED;
+  --color-surface:     #EDE9E0;
+  --color-surface-raised: #E4DFD5;
+  --color-surface-hover:  #D8D4C8;
+  --color-border:      #D8D4C8;
+  --color-text:        #1A2236;
+  --color-text-muted:  #4A5568;
+  --color-text-faint:  #8896A8;
+  /* ksp-blue and ksp-gold stay as-is — readable on light */
+  --shadow-float: 0 4px 24px rgba(26, 34, 54, 0.12), 0 1px 4px rgba(26, 34, 54, 0.08);
+}
+
+/* ------------------------------------------------------------
+   BASE RESETS & GLOBAL STYLES
+   ------------------------------------------------------------ */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: var(--text-sm);        /* 14px base */
+  line-height: var(--leading-normal);
+  color-scheme: dark;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-weight: var(--weight-regular);
+  color: var(--color-text);
+  background: var(--color-bg);
+  min-height: 100svh;
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ------------------------------------------------------------
+   TYPOGRAPHY UTILITIES
+   ------------------------------------------------------------ */
+.text-xs   { font-size: var(--text-xs); }
+.text-sm   { font-size: var(--text-sm); }
+.text-base { font-size: var(--text-base); }
+.text-lg   { font-size: var(--text-lg); }
+.text-xl   { font-size: var(--text-xl); }
+.text-2xl  { font-size: var(--text-2xl); }
+
+.font-mono { font-family: var(--font-mono); }
+.font-sans { font-family: var(--font-sans); }
+
+.font-regular  { font-weight: var(--weight-regular); }
+.font-medium   { font-weight: var(--weight-medium); }
+.font-semibold { font-weight: var(--weight-semibold); }
+
+.text-primary { color: var(--color-text); }
+.text-muted   { color: var(--color-text-muted); }
+.text-faint   { color: var(--color-text-faint); }
+.text-accent  { color: var(--color-accent); }
+.text-gold    { color: var(--ksp-gold); }
+.text-red     { color: var(--signal-red); }
+.text-amber   { color: var(--signal-amber); }
+.text-green   { color: var(--signal-green); }
+
+/* Section label style — plate/tab feel */
+.label-section {
+  font-family: var(--font-sans);
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+/* Mono data — case IDs, SQL, coordinates, confidence % */
+.data-mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text);
+}
+
+/* ------------------------------------------------------------
+   SURFACE / CARD UTILITIES
+   Prefer 1px line-700 hairline borders over drop shadows.
+   ------------------------------------------------------------ */
+.surface {
+  background: var(--color-surface);
+}
+
+.surface-raised {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+}
+
+.surface-float {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-float);
+}
+
+/* ------------------------------------------------------------
+   CHIP / BADGE UTILITIES
+   ------------------------------------------------------------ */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-chip);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  border: 1px solid currentColor;
+  line-height: 1.4;
+}
+
+.chip-gold {
+  color: var(--ksp-gold);
+  border-color: var(--ksp-gold);
+  background: rgba(198, 162, 77, 0.08);
+}
+
+.chip-blue {
+  color: var(--ksp-blue);
+  border-color: var(--ksp-blue);
+  background: rgba(44, 90, 160, 0.1);
+}
+
+.chip-red {
+  color: var(--signal-red);
+  border-color: var(--signal-red);
+  background: rgba(184, 73, 58, 0.08);
+}
+
+.chip-muted {
+  color: var(--color-text-muted);
+  border-color: var(--color-border);
+  background: transparent;
+}
+
+.chip-green {
+  color: var(--signal-green);
+  border-color: var(--signal-green);
+  background: rgba(76, 128, 103, 0.08);
+}
+
+/* ------------------------------------------------------------
+   BUTTON BASE
+   ------------------------------------------------------------ */
+button {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-card);
+  font-weight: var(--weight-medium);
+  font-size: var(--text-sm);
+  transition: background 200ms var(--ease-out), border-color 200ms var(--ease-out);
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.btn-primary {
+  background: var(--ksp-blue);
+  color: var(--text-100);
+  border-color: var(--ksp-blue);
+}
+.btn-primary:hover {
+  background: #3568bb;
+  border-color: #3568bb;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--color-text-muted);
+  border-color: var(--color-border);
+}
+.btn-ghost:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.btn-icon {
+  padding: var(--space-2);
+  border-radius: var(--radius-card);
+  background: transparent;
+  color: var(--color-text-muted);
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-icon:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+/* ------------------------------------------------------------
+   INPUT BASE
+   ------------------------------------------------------------ */
+input, textarea {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  background: var(--color-surface-hover);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-input);
+  padding: var(--space-2) var(--space-3);
+  outline: none;
+  width: 100%;
+  transition: border-color 150ms var(--ease-out);
+}
+input:focus, textarea:focus {
+  border-color: var(--ksp-blue);
+}
+input::placeholder, textarea::placeholder {
+  color: var(--color-text-faint);
+}
+
+/* ------------------------------------------------------------
+   DIVIDERS
+   ------------------------------------------------------------ */
+hr {
+  border: none;
+  border-top: 1px solid var(--color-border);
+}
+
+/* ------------------------------------------------------------
+   SCROLLBAR — minimal, theme-matched
+   ------------------------------------------------------------ */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-surface);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line-700);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-faint);
+}
+
+/* ------------------------------------------------------------
+   MOTION — prefers-reduced-motion
+   Disable stamp animation and message slide-in; keep opacity fades.
+   ------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  /* Re-allow opacity fades for non-motion users */
+  .fade-in {
+    transition: opacity var(--duration-message) var(--ease-out) !important;
+  }
+}
+
+/* ------------------------------------------------------------
+   ANIMATION KEYFRAMES
+   Stamp "verified" — scale+fade, slight overshoot then settle.
+   The ONE signature motion moment in the app. (design.md)
+   ------------------------------------------------------------ */
+@keyframes stamp-verified {
+  0%   { transform: scale(1.35); opacity: 0; }
+  70%  { transform: scale(0.95); opacity: 1; }
+  100% { transform: scale(1);    opacity: 1; }
+}
+
+@keyframes message-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes panel-open {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ------------------------------------------------------------
+   LAYOUT UTILITIES
+   ------------------------------------------------------------ */
+.flex        { display: flex; }
+.flex-col    { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.gap-1 { gap: var(--space-1); }
+.gap-2 { gap: var(--space-2); }
+.gap-3 { gap: var(--space-3); }
+.gap-4 { gap: var(--space-4); }
+.gap-6 { gap: var(--space-6); }
+.flex-1 { flex: 1; }
+.min-w-0 { min-width: 0; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Additional text utilities */
+.text-blue  { color: var(--ksp-blue); }
+.uppercase  { text-transform: uppercase; }
+.text-center { text-align: center; }
+.margin-top-1 { margin-top: var(--space-1); }
+
+/* Surface base (ink-950 bg, no border) */
+.surface-base {
+  background: var(--ink-950);
+}
+
+/* ── Animation utilities ── */
+.animate-fade-in {
+  animation: panel-open var(--duration-panel) var(--ease-out) both;
+}
+
+.animate-slide-in {
+  animation: slide-in-right var(--duration-panel) var(--ease-out) both;
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.spin {
+  animation: spin-rotate 1s linear infinite;
+}
+
+@keyframes spin-rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+

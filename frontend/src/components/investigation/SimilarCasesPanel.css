@@ -1,0 +1,121 @@
+/* ── Similar Cases Panel ── */
+
+.similar-cases-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.similar-cases-panel__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--line-700);
+  flex-shrink: 0;
+}
+
+.similar-cases-panel__search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--line-700);
+  flex-shrink: 0;
+}
+
+.similar-cases-panel__input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.similar-cases-panel__search-icon {
+  position: absolute;
+  left: var(--space-2);
+  color: var(--text-400);
+  pointer-events: none;
+}
+
+.similar-cases-panel__input {
+  padding: 4px 8px 4px 28px;
+  width: 100%;
+  background: var(--ink-800);
+  border: 1px solid var(--line-700);
+  border-radius: var(--radius-card);
+  color: var(--text-100);
+  font-size: var(--text-xs);
+}
+
+.similar-cases-panel__input:focus {
+  border-color: var(--ksp-blue);
+  outline: none;
+}
+
+.similar-cases-panel__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2);
+}
+
+.similar-cases-panel__status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+}
+
+.similar-cases-panel__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* ── Similar Case Item (button card) ── */
+
+.similar-case-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--ink-800);
+  border: 1px solid var(--line-700);
+  border-radius: var(--radius-card);
+  cursor: pointer;
+  transition: border-color 150ms var(--ease-out), background 150ms var(--ease-out);
+  width: 100%;
+  text-align: left;
+  color: var(--text-100);
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.similar-case-item:hover {
+  border-color: var(--ksp-blue);
+  background: var(--ink-700);
+}
+
+.similar-case-item__rank {
+  width: 24px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.similar-case-item__id {
+  flex: 1;
+}
+
+.similar-case-item__arrow {
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 150ms var(--ease-out);
+}
+
+.similar-case-item:hover .similar-case-item__arrow {
+  opacity: 1;
+}

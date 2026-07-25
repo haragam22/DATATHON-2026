@@ -1,0 +1,306 @@
+/* ============================================================
+   Response Renderer Styles — shared across all response_types.
+   Each renderer component imports this single file.
+   ============================================================ */
+
+/* ── ResponseText ── */
+.response-text {
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  color: var(--color-text);
+}
+
+.response-text--error {
+  color: var(--signal-red);
+}
+
+.response-text__error-label {
+  display: inline-block;
+  margin-bottom: var(--space-2);
+}
+
+.response-text__body p {
+  margin-bottom: var(--space-1);
+}
+
+.response-text__body p:last-child {
+  margin-bottom: 0;
+}
+
+.response-text__blank {
+  height: var(--space-2);
+}
+
+/* ── ResponseCard ── */
+.response-card {
+  font-size: var(--text-sm);
+}
+
+.response-card__header {
+  margin-bottom: var(--space-3);
+}
+
+.response-card__grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.response-card__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.response-card__dl {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.response-card__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.response-card__label {
+  font-size: var(--text-xs);
+  margin: 0;
+}
+
+.response-card__value {
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.response-card__json {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: var(--space-2) var(--space-3);
+  overflow-x: auto;
+  white-space: pre;
+  margin: 0;
+}
+
+/* ── Similar Case Card ── */
+.similar-case-card {
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.similar-case-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text);
+}
+
+.similar-case-card__brief {
+  line-height: var(--leading-normal);
+}
+
+.similar-case-card__extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+/* ── ResponseChart ── */
+.response-chart {
+  width: 100%;
+}
+
+.response-chart__title {
+  margin-bottom: var(--space-3);
+}
+
+.response-chart__container {
+  width: 100%;
+  min-height: 280px;
+}
+
+/* Recharts tooltip override */
+.chart-tooltip {
+  padding: var(--space-2) var(--space-3) !important;
+  border-radius: var(--radius-card) !important;
+}
+
+.chart-tooltip__label {
+  margin-bottom: var(--space-1);
+  color: var(--color-text-muted);
+}
+
+.chart-tooltip__value {
+  margin: 0;
+}
+
+/* recharts internal overrides */
+.recharts-default-tooltip {
+  display: none !important;
+}
+
+/* ── ResponseMap ── */
+.response-map {
+  width: 100%;
+}
+
+.response-map__label {
+  margin-bottom: var(--space-3);
+}
+
+.response-map__container {
+  width: 100%;
+  height: 340px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+/* Leaflet tooltip override for dark theme */
+.ksp-map-tooltip {
+  background: var(--ink-800) !important;
+  color: var(--text-100) !important;
+  border: 1px solid var(--line-700) !important;
+  border-radius: var(--radius-card) !important;
+  font-family: var(--font-mono) !important;
+  font-size: var(--text-xs) !important;
+  padding: var(--space-1) var(--space-2) !important;
+  box-shadow: var(--shadow-float) !important;
+}
+
+.ksp-map-tooltip::before {
+  border-top-color: var(--line-700) !important;
+}
+
+/* Override leaflet default marker styling */
+.leaflet-container {
+  background: var(--ink-950) !important;
+  font-family: var(--font-sans) !important;
+}
+
+/* ── ResponseNetwork ── */
+.response-network {
+  width: 100%;
+}
+
+.response-network__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.response-network__legend {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.response-network__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.response-network__legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  background: transparent;
+}
+
+.response-network__canvas {
+  width: 100%;
+  height: 400px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+  position: relative;
+}
+
+.response-network__canvas canvas {
+  border-radius: var(--radius-card);
+}
+
+.response-network__detail {
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* ── ResponseEvidence ── */
+.response-evidence {
+  width: 100%;
+}
+
+.response-evidence__header {
+  margin-bottom: var(--space-3);
+}
+
+.response-evidence__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-3);
+}
+
+.evidence-tile {
+  position: relative;
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 150ms var(--ease-out), background 150ms var(--ease-out);
+}
+
+.evidence-tile:hover {
+  background: var(--ink-800);
+  border-color: var(--ksp-gold);
+}
+
+.evidence-tile__watermark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-35deg);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--text-600);
+  opacity: 0.18;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+}
+
+.evidence-tile__icon {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  padding-top: 2px;
+}
+
+.evidence-tile__info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.evidence-tile__type {
+  align-self: flex-start;
+}
+
+.evidence-tile__desc {
+  color: var(--color-text);
+  line-height: var(--leading-normal);
+}

@@ -1,0 +1,111 @@
+/* ── Verification Stamp ── */
+
+.v-stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  background: rgba(15, 22, 38, 0.6);
+  border-radius: 20px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 150ms var(--ease-out), transform 120ms var(--ease-out);
+  border: 1px solid transparent;
+  outline: none;
+}
+
+.v-stamp:hover {
+  background: var(--ink-700);
+}
+
+/* ── Seal Ring Bands ── */
+
+.v-stamp__seal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  padding: 2px;
+  position: relative;
+}
+
+/* Band: High (≥80%) — Solid Gold Ring */
+.v-stamp--high .v-stamp__seal {
+  border: 2px solid var(--ksp-gold);
+  color: var(--ksp-gold);
+  animation: stamp-down 120ms var(--ease-out) both;
+}
+
+/* Band: Medium (50–79%) — Dashed Gold Ring */
+.v-stamp--medium .v-stamp__seal {
+  border: 2px dashed var(--ksp-gold);
+  color: var(--ksp-gold);
+}
+
+/* Band: Low (<50%) — Dashed Signal Red Ring */
+.v-stamp--low .v-stamp__seal {
+  border: 2px dashed var(--signal-red);
+  color: var(--signal-red);
+}
+
+/* ── Abstention state ── */
+.v-stamp--abstention {
+  border: 1px dashed var(--line-700);
+  border-radius: var(--radius-chip);
+  padding: var(--space-1) var(--space-2);
+}
+
+.v-stamp__abstention-text {
+  font-size: 10px;
+  letter-spacing: var(--tracking-label);
+}
+
+/* ── Text elements inside stamp ── */
+
+.v-stamp__score {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.v-stamp__label {
+  font-family: var(--font-sans);
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-top: 1px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.v-stamp__chevron {
+  color: var(--text-400);
+  display: flex;
+  align-items: center;
+}
+
+/* ── Stamped Down Animation ── */
+@keyframes stamp-down {
+  0% {
+    transform: scale(1.3);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(0.95);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .v-stamp--high .v-stamp__seal {
+    animation: none;
+  }
+}

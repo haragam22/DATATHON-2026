@@ -1,0 +1,94 @@
+/* ── Message List ── */
+
+.message-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-6) 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.message-list__anchor {
+  height: 1px;
+  flex-shrink: 0;
+}
+
+/* ── Empty state ── */
+.message-list__empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-12);
+  user-select: none;
+}
+
+.message-list__empty-icon {
+  margin-bottom: var(--space-2);
+  opacity: 0.6;
+}
+
+.message-list__starters {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  max-width: 580px;
+}
+
+.message-list__starter-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.message-list__starter-btn {
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  transition: background 150ms var(--ease-out), transform 150ms var(--ease-out);
+}
+
+.message-list__starter-btn:hover {
+  background: rgba(44, 90, 160, 0.25);
+  transform: translateY(-1px);
+}
+
+/* ── Typing indicator ── */
+.typing-indicator {
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-3) var(--space-4) !important;
+  min-height: 0 !important;
+}
+
+.typing-indicator__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-faint);
+  animation: typing-pulse 1.4s ease-in-out infinite;
+}
+
+.typing-indicator__dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-indicator__dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing-pulse {
+  0%, 60%, 100% {
+    opacity: 0.3;
+    transform: scale(0.85);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
