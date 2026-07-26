@@ -15,6 +15,7 @@ import { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Popup, Tooltip } from 'react-leaflet';
 import { Loader, AlertTriangle, Filter, MapPin } from 'lucide-react';
 import { getHotspots, ApiError } from '../../services/api';
+import { hotspotHeatColor } from '../../styles/mapTokens';
 import 'leaflet/dist/leaflet.css';
 import './HotspotMap.css';
 
@@ -88,10 +89,10 @@ export default function HotspotMap({ crimeType, onSelectDistrict }) {
           scrollWheelZoom={false}
           className="hotspot-map__leaflet"
         >
-          {/* CARTO Dark All Basemap */}
+          {/* CARTO Light (Positron) Basemap — paper-first theme, dark tiles didn't read against buff */}
           <TileLayer
             attribution='&copy; <a href="https://carto.com/">CARTO</a>'
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
           />
 
           {displayClusters.map((cluster, idx) => {
@@ -101,8 +102,12 @@ export default function HotspotMap({ crimeType, onSelectDistrict }) {
             const district = cluster.district || cluster.district_name || 'Karnataka Sector';
             const primaryCrime = cluster.crime_type || cluster.primary_crime || 'General Crime';
 
-            // Size circle radius between 12px and 35px based on count
-            const radius = Math.min(Math.max(12, count * 1.5), 35);
+            // Size circle radius between 10px and 32px based on count; density
+            // also drives the cold-blue -> amber -> case-red heat gradient
+            const maxCount = Math.max(...displayClusters.map((c) => c.count || c.incident_count || 10));
+            const heatT = count / maxCount;
+            const heatColor = hotspotHeatColor(heatT);
+            const radius = Math.min(Math.max(10, 8 + count * 0.9), 32);
 
             return (
               <CircleMarker
@@ -110,9 +115,9 @@ export default function HotspotMap({ crimeType, onSelectDistrict }) {
                 center={[lat, lon]}
                 radius={radius}
                 pathOptions={{
-                  color: 'var(--ksp-gold)',
-                  fillColor: 'var(--ksp-blue)',
-                  fillOpacity: 0.55,
+                  color: heatColor,
+                  fillColor: heatColor,
+                  fillOpacity: 0.35,
                   weight: 2,
                 }}
                 eventHandlers={{

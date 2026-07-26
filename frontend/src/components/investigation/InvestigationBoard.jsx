@@ -22,9 +22,9 @@ import './InvestigationBoard.css';
 
 // Role → ring color mapping (from design.md)
 const ROLE_COLORS = {
-  seed:      '#B8493A',   // signal-red — seed accused from the queried case
-  expanded:  '#96A2C0',   // text-400   — co-accused pulled in via recidivism expansion
-  selected:  '#C6A24D',   // ksp-gold   — currently focused entity
+  seed:      '#B23A34',   // case red — seed accused from the queried case
+  expanded:  '#4A5A6A',   // slate steel — co-accused pulled in via recidivism expansion
+  selected:  '#E8A33D',   // evidence amber — currently focused entity
 };
 
 function getInitials(name) {
@@ -147,21 +147,21 @@ export default function InvestigationBoard({ initialCaseId = 1, onSelectEntity }
           : ROLE_COLORS.expanded;
       const initials = getInitials(node.name);
 
-      // Gold glow ring for selected node
+      // Selected node: crisp outer ring, flat — no glow/blur (investigation
+      // board stays flat per design.md, this is a focus indicator not a light)
       if (isSelected) {
         ctx.beginPath();
         ctx.arc(x, y, r + 5, 0, 2 * Math.PI);
-        ctx.fillStyle = 'rgba(198, 162, 77, 0.25)';
-        ctx.fill();
-        ctx.strokeStyle = '#C6A24D';
-        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = '#E8A33D';
+        ctx.lineWidth = 1.5;
         ctx.stroke();
       }
 
-      // Background
+      // Background — the board stays a dark control-room canvas by design
+      // (see "Dark-Canvas Exception" in design.md), independent of theme
       ctx.beginPath();
       ctx.arc(x, y, r, 0, 2 * Math.PI);
-      ctx.fillStyle = '#161F35'; // ink-800
+      ctx.fillStyle = '#1C2C4A'; // dark-theme raised surface
       ctx.fill();
 
       // Outer ring
@@ -170,7 +170,7 @@ export default function InvestigationBoard({ initialCaseId = 1, onSelectEntity }
       ctx.stroke();
 
       // Initials text
-      ctx.fillStyle = '#EAEEF7'; // text-100
+      ctx.fillStyle = '#EAECEF'; // case paper
       ctx.font = `600 11px 'IBM Plex Mono', monospace`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -183,7 +183,7 @@ export default function InvestigationBoard({ initialCaseId = 1, onSelectEntity }
   const paintLink = useCallback(
     (link, ctx) => {
       const isHovered = hoveredLink === link;
-      ctx.strokeStyle = isHovered ? '#96A2C0' : '#2B3757'; // text-400 : line-700
+      ctx.strokeStyle = isHovered ? '#9FB0C0' : '#4A5A6A'; // text-400 (dark) : slate steel
       ctx.lineWidth = isHovered ? 2 : Math.min(link.weight || 1, 3) * 0.6;
       ctx.beginPath();
       ctx.moveTo(link.source.x, link.source.y);
@@ -193,7 +193,7 @@ export default function InvestigationBoard({ initialCaseId = 1, onSelectEntity }
       if (isHovered && link.label) {
         const midX = (link.source.x + link.target.x) / 2;
         const midY = (link.source.y + link.target.y) / 2;
-        ctx.fillStyle = '#EAEEF7';
+        ctx.fillStyle = '#EAECEF';
         ctx.font = `500 10px 'IBM Plex Mono', monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -300,7 +300,7 @@ export default function InvestigationBoard({ initialCaseId = 1, onSelectEntity }
               graphData={graphData}
               width={dimensions.width}
               height={dimensions.height}
-              backgroundColor="#0A0F1C"
+              backgroundColor="#16233D"
               nodeCanvasObject={paintNode}
               nodePointerAreaPaint={(node, color, ctx) => {
                 ctx.beginPath();

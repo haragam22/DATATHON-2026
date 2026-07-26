@@ -1,0 +1,11 @@
+.network-dots {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.network-dots canvas {
+  display: block;
+}

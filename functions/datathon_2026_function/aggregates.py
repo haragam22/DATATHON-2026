@@ -17,36 +17,16 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
-try:
-    import numpy as np
-    from sklearn.cluster import DBSCAN
-    _HAS_SKLEARN = True
-except ImportError:
-    _HAS_SKLEARN = False
+import numpy as np
+from sklearn.cluster import DBSCAN
+
+import zcql_util
 
 
 def _cluster_points(coords_list: list[tuple[float, float]], eps: float = 0.05, min_samples: int = 3) -> list[int]:
-    if _HAS_SKLEARN and len(coords_list) > 0:
-        coords_arr = np.array(coords_list)
-        return [int(x) for x in DBSCAN(eps=eps, min_samples=min_samples).fit_predict(coords_arr)]
-
-    n = len(coords_list)
-    labels = [-1] * n
-    cluster_id = 0
-    for i in range(n):
-        if labels[i] != -1:
-            continue
-        neighbors = [
-            j for j in range(n)
-            if abs(coords_list[i][0] - coords_list[j][0]) <= eps and abs(coords_list[i][1] - coords_list[j][1]) <= eps
-        ]
-        if len(neighbors) >= min_samples:
-            for idx in neighbors:
-                labels[idx] = cluster_id
-            cluster_id += 1
-    return labels
-
-import zcql_util
+    if not coords_list:
+        return []
+    return [int(x) for x in DBSCAN(eps=eps, min_samples=min_samples).fit_predict(np.array(coords_list))]
 
 _PAGE = 200
 

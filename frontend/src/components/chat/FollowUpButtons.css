@@ -32,14 +32,20 @@
   font-size: var(--text-xs);
   cursor: pointer;
   user-select: none;
-  transition: all 120ms var(--ease-out);
+  transition: background 120ms var(--ease-out), color 120ms var(--ease-out), border-color 120ms var(--ease-out), transform 120ms var(--ease-out);
   text-align: left;
+  animation: message-enter var(--duration-panel) var(--ease-out) both;
 }
+
+.follow-up-chip:nth-child(2) { animation-delay: 40ms; }
+.follow-up-chip:nth-child(3) { animation-delay: 80ms; }
+.follow-up-chip:nth-child(4) { animation-delay: 120ms; }
+.follow-up-chip:nth-child(n+5) { animation-delay: 160ms; }
 
 .follow-up-chip:hover:not(:disabled) {
   background: var(--ink-700);
   color: var(--text-100);
-  border-color: var(--ksp-blue);
+  border-color: var(--ksp-gold);
   transform: translateY(-1px);
 }
 
@@ -53,6 +59,6 @@
 }
 
 .follow-up-chip__icon {
-  color: var(--ksp-blue);
+  color: var(--ksp-gold);
   flex-shrink: 0;
 }

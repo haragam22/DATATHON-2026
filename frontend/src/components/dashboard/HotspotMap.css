@@ -25,7 +25,6 @@
   height: 8px;
   border-radius: 50%;
   background: var(--ksp-gold);
-  box-shadow: 0 0 6px var(--ksp-gold);
 }
 
 .hotspot-map__canvas {

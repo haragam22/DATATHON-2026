@@ -24,16 +24,26 @@
 
 /* ── Content containers ── */
 
+/* Assistant wrapper is a flex child of .msg--assistant with no flex-grow
+   by default, so it was shrinking to its content's intrinsic width instead
+   of filling the thread column — the actual cause of map/chart cards
+   rendering narrow/portrait instead of using the full available width. */
+.msg__wrapper {
+  flex: 1;
+  min-width: 0;
+}
+
 .msg__content {
   max-width: 100%;
   min-width: 0;
 }
 
-/* User message: compact, right-side */
+/* User message: compact, right-side. Amber fill, not navy — navy would
+   blend straight into the navy app shell background. */
 .msg__content--user {
   max-width: 70%;
-  background: var(--ksp-blue);
-  color: var(--text-100);
+  background: var(--ksp-gold);
+  color: #14171C;
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-card);
   font-size: var(--text-sm);
@@ -57,7 +67,7 @@
 }
 
 .msg__content--error {
-  border-color: rgba(184, 73, 58, 0.3);
+  border-color: rgba(178, 58, 52, 0.3);
 }
 
 /* Stamp positioning wrapper */

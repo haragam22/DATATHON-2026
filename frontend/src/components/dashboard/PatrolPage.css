@@ -1,0 +1,81 @@
+/* ── Patrol Page CSS ── */
+
+.patrol-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  padding: var(--space-4);
+  background: var(--ink-950);
+}
+
+.patrol-page__grid {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: var(--space-4);
+  min-height: 500px;
+}
+
+@media (max-width: 1024px) {
+  .patrol-page__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.patrol-page__map-panel {
+  min-height: 480px;
+}
+
+.patrol-page__list-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  overflow: hidden;
+}
+
+.patrol-page__list-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--line-700);
+}
+
+.patrol-page__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  font-size: 0.8rem;
+}
+
+.patrol-page__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.patrol-page__row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-card);
+  background: var(--ink-900);
+}
+
+.patrol-page__rank {
+  font-size: 0.85rem;
+  min-width: 28px;
+}
+
+.patrol-page__row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}

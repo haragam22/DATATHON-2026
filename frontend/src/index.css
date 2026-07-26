@@ -1,37 +1,58 @@
 /* ============================================================
    KSP CRIME INTELLIGENCE — Design Token System
    Source: docs/design.md
-   Dark-first. Light theme = token swap only (see below).
+   Grounded in the actual subject (evidence-tag markers, control-room
+   night-shift screens, cool case-file grey) rather than generic
+   "police blue," and deliberately not one of the three palettes every
+   AI-generated design defaults to (warm cream+terracotta, near-black+
+   acid accent, newspaper-broadsheet hairlines).
+   Dark theme = token swap only, opt-in via [data-theme="dark"].
    ============================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
 
 /* ------------------------------------------------------------
-   COLOR TOKENS — dark command-center base
+   COLOR TOKENS — control-room night-shift base (default)
    ------------------------------------------------------------ */
 :root {
-  /* Backgrounds / surfaces */
-  --ink-950: #0A0F1C;   /* App background */
-  --ink-900: #0F1626;   /* Base panel surface */
-  --ink-800: #161F35;   /* Raised surface — cards, sidecars */
-  --ink-700: #1F2A45;   /* Hover/active surface, input fields */
+  /* Backgrounds / surfaces — built from ink navy itself, not sci-fi black */
+  --ink-950: #16233D;   /* App background */
+  --ink-900: #1C2C4A;   /* Base panel surface */
+  --ink-800: #223457;   /* Raised surface — cards, sidecars */
+  --ink-700: #2A3F66;   /* Hover/active surface, input fields */
 
   /* Borders */
-  --line-700: #2B3757;  /* Hairline borders, dividers */
+  --line-700: #4A5A6A;  /* Slate steel — dividers, hairlines */
 
   /* Text */
-  --text-100: #EAEEF7;  /* Primary text */
-  --text-400: #96A2C0;  /* Secondary text, labels, captions */
-  --text-600: #5C6890;  /* Disabled/tertiary text */
+  --text-100: #EAECEF;  /* Primary text — case paper on navy */
+  --text-400: #9FB0C0;  /* Secondary text, labels, captions */
+  --text-600: #6C7F91;  /* Disabled/tertiary text */
 
-  /* Brand accents */
-  --ksp-blue: #2C5AA0;  /* Primary accent — links, buttons, active nav, chart series 1 */
-  --ksp-gold: #C6A24D;  /* Stamp/seal, citations, key highlights — use sparingly */
+  /* Brand accents — evidence-tag amber + control-room navy, not "police blue" */
+  --ksp-blue: #16233D;   /* Ink navy — authority: nav bar, headers, dark surfaces */
+  --ksp-gold: #E8A33D;   /* Evidence amber — PRIMARY accent: CTAs, highlights, evidence tags */
+  --stamp-ink: #1F7A8C;  /* Verification teal — the confidence stamp ONLY, kept off the risk axis so the two are never confused (see design.md) */
 
-  /* Signals */
-  --signal-red:   #B8493A;  /* Errors, high-risk, low confidence */
-  --signal-amber: #C68A3D;  /* Medium risk/confidence, warnings */
-  --signal-green: #4C8067;  /* High confidence, verified, success */
+  /* Signals (risk axis) */
+  --signal-red:   #B23A34;  /* Case red — alerts, high risk, hotspot peaks. Use sparingly. */
+  --signal-amber: #E8A33D;  /* Evidence amber doubles as moderate-risk signal */
+  --signal-green: #3B8F6D;  /* Verified green — low risk, success */
+
+  /* Hotspot heat-map gradient (cold → hot) */
+  --hotspot-cold: #3D6FA8;
+
+  /* Case status badges (CaseStatusMaster) — text is always the darkest
+     shade from the same family, never plain black, so contrast holds
+     regardless of which status is showing. These stay light-on-light
+     (they're paper-form badges) even in the dark app shell — a status
+     stamp is meant to read like a physical label, not glow. */
+  --status-investigation-bg:   #FAEEDA;
+  --status-investigation-text: #633806;
+  --status-chargesheeted-bg:   #E1F5EE;
+  --status-chargesheeted-text: #085041;
+  --status-closed-bg:   #F1EFE8;
+  --status-closed-text: #444441;
 
   /* Semantic aliases */
   --color-bg:          var(--ink-950);
@@ -42,11 +63,13 @@
   --color-text:        var(--text-100);
   --color-text-muted:  var(--text-400);
   --color-text-faint:  var(--text-600);
-  --color-accent:      var(--ksp-blue);
-  --color-accent-alt:  var(--ksp-gold);
+  --color-accent:      var(--ksp-gold);
+  --color-accent-alt:  var(--ksp-blue);
 
-  /* Floating element shadow — ink-950 at 40%, soft, low-opacity */
-  --shadow-float: 0 4px 24px rgba(10, 15, 28, 0.55), 0 1px 4px rgba(10, 15, 28, 0.4);
+  /* Flat by design — investigation board, hotspot map, and dashboard
+     views carry no shadow/glow at all. This one soft shadow is reserved
+     for genuinely floating elements (modals, dropdowns, sidecar overlay). */
+  --shadow-float: 0 4px 16px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
 
   /* ------------------------------------------------------------
      TYPOGRAPHY TOKENS
@@ -92,12 +115,11 @@
 
   /* ------------------------------------------------------------
      SHAPE
-     Small, consistent. Cards 4px, chips/badges 2px.
-     Never 16px+ (consumer-app register, wrong for this product).
+     Consistent across the app — don't mix radii within the same view.
      ------------------------------------------------------------ */
-  --radius-card:  4px;
-  --radius-chip:  2px;
-  --radius-input: 4px;
+  --radius-card:  12px;
+  --radius-chip:  6px;
+  --radius-input: 8px;
 
   /* ------------------------------------------------------------
      ICONOGRAPHY
@@ -115,20 +137,35 @@
 }
 
 /* ------------------------------------------------------------
-   OPTIONAL LIGHT THEME (station daytime use)
+   OPTIONAL DARK THEME (night control-room use)
    Token swap only — not a separate design pass.
    ------------------------------------------------------------ */
 [data-theme="light"] {
-  --color-bg:          #F5F3ED;
-  --color-surface:     #EDE9E0;
-  --color-surface-raised: #E4DFD5;
-  --color-surface-hover:  #D8D4C8;
-  --color-border:      #D8D4C8;
-  --color-text:        #1A2236;
-  --color-text-muted:  #4A5568;
-  --color-text-faint:  #8896A8;
-  /* ksp-blue and ksp-gold stay as-is — readable on light */
-  --shadow-float: 0 4px 24px rgba(26, 34, 54, 0.12), 0 1px 4px rgba(26, 34, 54, 0.08);
+  /* Cool case-file grey, opt-in for daytime station use.
+     Must redefine the raw ink/text/line-700 scale too, not just the
+     color- semantic aliases -- many components (message bubbles, panels,
+     canvases) reference ink-800, text-100, line-700 directly, and if
+     only the aliases flip, those components stay stuck on the dark navy
+     values no matter which theme is active. */
+  --ink-950: #EAECEF;
+  --ink-900: #E2E5E9;
+  --ink-800: #D9DDE2;
+  --ink-700: #CDD2D9;
+  --line-700: #4A5A6A;
+  --text-100: #14171C;
+  --text-400: #4A5A6A;
+  --text-600: #7C8894;
+
+  --color-bg:          var(--ink-950);
+  --color-surface:     var(--ink-900);
+  --color-surface-raised: var(--ink-800);
+  --color-surface-hover:  var(--ink-700);
+  --color-border:      var(--line-700);
+  --color-text:        var(--text-100);
+  --color-text-muted:  var(--text-400);
+  --color-text-faint:  var(--text-600);
+  /* ksp-gold, stamp-ink, signal-red/amber/green stay as-is — all readable on case paper */
+  --shadow-float: 0 4px 16px rgba(20, 23, 28, 0.12), 0 1px 3px rgba(20, 23, 28, 0.08);
 }
 
 /* ------------------------------------------------------------
@@ -147,6 +184,10 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
 }
 
 body {
@@ -244,21 +285,23 @@ body {
 }
 
 .chip-gold {
-  color: var(--ksp-gold);
+  color: #8A5A15;
   border-color: var(--ksp-gold);
-  background: rgba(198, 162, 77, 0.08);
+  background: rgba(232, 163, 61, 0.15);
 }
 
 .chip-blue {
-  color: var(--ksp-blue);
-  border-color: var(--ksp-blue);
-  background: rgba(44, 90, 160, 0.1);
+  /* Citations/reference chips read as verification teal, not navy — navy
+     (ink authority) has near-zero contrast against the navy app shell */
+  color: var(--stamp-ink);
+  border-color: var(--stamp-ink);
+  background: rgba(31, 122, 140, 0.12);
 }
 
 .chip-red {
   color: var(--signal-red);
   border-color: var(--signal-red);
-  background: rgba(184, 73, 58, 0.08);
+  background: rgba(178, 58, 52, 0.1);
 }
 
 .chip-muted {
@@ -270,7 +313,7 @@ body {
 .chip-green {
   color: var(--signal-green);
   border-color: var(--signal-green);
-  background: rgba(76, 128, 103, 0.08);
+  background: rgba(59, 143, 109, 0.1);
 }
 
 /* ------------------------------------------------------------
@@ -290,7 +333,7 @@ button {
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-input);
   font-weight: var(--weight-medium);
   font-size: var(--text-sm);
   transition: background 200ms var(--ease-out), border-color 200ms var(--ease-out);
@@ -299,13 +342,15 @@ button {
 }
 
 .btn-primary {
-  background: var(--ksp-blue);
-  color: var(--text-100);
-  border-color: var(--ksp-blue);
+  /* Evidence amber — the primary accent is reserved for CTAs like this one */
+  background: var(--ksp-gold);
+  /* Fixed dark text — amber needs deposition-ink text, not a light one */
+  color: #14171C;
+  border-color: var(--ksp-gold);
 }
 .btn-primary:hover {
-  background: #3568bb;
-  border-color: #3568bb;
+  background: #D6912E;
+  border-color: #D6912E;
 }
 
 .btn-ghost {
@@ -320,7 +365,7 @@ button {
 
 .btn-icon {
   padding: var(--space-2);
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-input);
   background: transparent;
   color: var(--color-text-muted);
   border: 1px solid transparent;
@@ -350,7 +395,7 @@ input, textarea {
   transition: border-color 150ms var(--ease-out);
 }
 input:focus, textarea:focus {
-  border-color: var(--ksp-blue);
+  border-color: var(--ksp-gold);
 }
 input::placeholder, textarea::placeholder {
   color: var(--color-text-faint);

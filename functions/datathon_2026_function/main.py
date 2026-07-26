@@ -17,8 +17,11 @@ if os.path.exists(_env_path):
 from flask import Request, make_response, jsonify
 import zcatalyst_sdk
 
-from pipeline import PipelineError, run_query_pipeline
+from pipeline import run_query_pipeline
 from network import build_case_network
+from pcr_dispatch import get_active_dispatches
+from sos_alerts import get_active_sos_alerts
+from voice import VoiceError, transcribe
 from similar_cases import find_similar_cases
 from entity_context import get_entity_context
 from risk_score import get_risk_score
@@ -33,16 +36,57 @@ Execute below command to install SDK in global for enabling code suggestions
 -> python3 -m pip install zcatalyst-sdk
 '''
 
+# (ExceptionType, HTTP status) pairs checked, in order, on top of the
+# AuthenticationRequired/ForbiddenScope/CaseNotFound mapping every scoped
+# route shares — lets one _run_scoped implementation serve every endpoint
+# whose only per-route difference is which extra exception maps to 400.
+_STANDARD_EXTRA_STATUS = ()
+
+
+def _envelope(response_type, data, cited_case_ids=(), generated_sql="", confidence_score=1.0):
+    return {
+        "response_type": response_type,
+        "data": data,
+        "cited_case_ids": list(cited_case_ids),
+        "generated_sql": generated_sql,
+        "confidence_score": confidence_score,
+        "follow_up_questions": [],
+    }
+
+
+def _run_scoped(app, logger, label, scope, work, extra_status=_STANDARD_EXTRA_STATUS):
+    """Runs `work(zcql_service)` behind the auth+scope check every endpoint
+    needs, and maps its result/exceptions to (status, json_body). `work`
+    returns the JSON-able response body directly (already enveloped, or a
+    raw dict for endpoints — like admin backfill — that don't use the
+    envelope shape)."""
+    try:
+        zcql_service = app.zcql()
+        check_scope(resolve_app_user(app, zcql_service), scope)
+        return 200, work(zcql_service)
+    except AuthenticationRequired as e:
+        return 401, {"error": str(e)}
+    except ForbiddenScope as e:
+        return 403, {"error": str(e)}
+    except CaseNotFound as e:
+        return 404, {"error": str(e)}
+    except Exception as e:  # noqa: BLE001 — surfaced to the caller, not swallowed
+        for exc_type, status in extra_status:
+            if isinstance(e, exc_type):
+                return status, {"error": str(e)}
+        logger.error(f"{label} error: {e}")
+        return 500, {"error": str(e)}
+
+
 def handler(request: Request):
     app = zcatalyst_sdk.initialize(req=request)
     logger = logging.getLogger()
-    if request.path == "/":
-        response = make_response(jsonify({
-            'status': 'success',
-            'message': 'Hello from main.py'
-        }), 200)
-        return response
-    elif request.path == "/api/query":
+    path = request.path
+
+    if path == "/":
+        return make_response(jsonify({'status': 'success', 'message': 'Hello from main.py'}), 200)
+
+    elif path == "/api/query":
         if request.method != "POST":
             return make_response(jsonify({"error": "POST only"}), 405)
         body = request.get_json(silent=True) or {}
@@ -68,20 +112,14 @@ def handler(request: Request):
             logger.error(f"/api/query conversation log write failed: {log_e}")
         try:
             envelope = run_query_pipeline(question, zcql_service)
-        except PipelineError as e:
+        except Exception as e:  # noqa: BLE001 — api.js promises 200-always for this route, never an uncaught 500
             logger.error(f"/api/query pipeline error: {e}")
             try:
                 write_audit_log(app, app_user, question, "", 0)
             except Exception as audit_e:  # noqa: BLE001 — logged, never swallowed silently
                 logger.error(f"/api/query audit log write failed: {audit_e}")
-            return make_response(jsonify({
-                "response_type": "text",
-                "data": {"error": str(e), "session_id": session_id},
-                "cited_case_ids": [],
-                "generated_sql": "",
-                "confidence_score": 0.0,
-                "follow_up_questions": [],
-            }), 200)
+            body = _envelope("text", {"error": str(e), "session_id": session_id}, confidence_score=0.0)
+            return make_response(jsonify(body), 200)
         try:
             result_row_count = len(envelope.data.get("rows", []))
             write_audit_log(app, app_user, question, envelope.generated_sql, result_row_count)
@@ -98,242 +136,178 @@ def handler(request: Request):
         envelope_dict = envelope.model_dump()
         envelope_dict["data"]["session_id"] = session_id
         return make_response(jsonify(envelope_dict), 200)
-    elif request.path.startswith("/api/network/"):
+
+    elif path.startswith("/api/network/"):
         if request.method != "GET":
             return make_response(jsonify({"error": "GET only"}), 405)
-        case_id_str = request.path.rsplit("/", 1)[-1]
+        case_id_str = path.rsplit("/", 1)[-1]
         if not case_id_str.isdigit():
             return make_response(jsonify({"error": "case_id must be an integer"}), 400)
-        try:
-            zcql_service = app.zcql()
-            check_scope(resolve_app_user(app, zcql_service), "network")
+
+        def work(zcql_service):
             graph_data = build_case_network(int(case_id_str), zcql_service)
-        except AuthenticationRequired as e:
-            return make_response(jsonify({"error": str(e)}), 401)
-        except ForbiddenScope as e:
-            return make_response(jsonify({"error": str(e)}), 403)
-        except CaseNotFound as e:
-            return make_response(jsonify({"error": str(e)}), 404)
-        except Exception as e:  # noqa: BLE001 — surfaced to the caller, not swallowed
-            logger.error(f"/api/network error: {e}")
-            return make_response(jsonify({"error": str(e)}), 500)
-        return make_response(jsonify({
-            "response_type": "network",
-            "data": graph_data,
-            "cited_case_ids": graph_data["case_ids"],
-            "generated_sql": "",
-            "confidence_score": 1.0,
-            "follow_up_questions": [],
-        }), 200)
-    elif request.path.startswith("/api/similar-cases/"):
+            return _envelope("network", graph_data, graph_data["case_ids"])
+
+        status, payload = _run_scoped(app, logger, "/api/network", "network", work)
+        return make_response(jsonify(payload), status)
+
+    elif path.startswith("/api/similar-cases/"):
         if request.method != "GET":
             return make_response(jsonify({"error": "GET only"}), 405)
-        case_id_str = request.path.rsplit("/", 1)[-1]
+        case_id_str = path.rsplit("/", 1)[-1]
         if not case_id_str.isdigit():
             return make_response(jsonify({"error": "case_id must be an integer"}), 400)
-        try:
-            zcql_service = app.zcql()
-            check_scope(resolve_app_user(app, zcql_service), "similar-cases")
+
+        def work(zcql_service):
             matches = find_similar_cases(int(case_id_str), zcql_service)
-        except AuthenticationRequired as e:
-            return make_response(jsonify({"error": str(e)}), 401)
-        except ForbiddenScope as e:
-            return make_response(jsonify({"error": str(e)}), 403)
-        except CaseNotFound as e:
-            return make_response(jsonify({"error": str(e)}), 404)
-        except Exception as e:  # noqa: BLE001 — surfaced to the caller, not swallowed
-            logger.error(f"/api/similar-cases error: {e}")
-            return make_response(jsonify({"error": str(e)}), 500)
-        return make_response(jsonify({
-            "response_type": "card",
-            "data": {"similar_cases": matches},
-            "cited_case_ids": [m["case_id"] for m in matches],
-            "generated_sql": "",
-            "confidence_score": 1.0,
-            "follow_up_questions": [],
-        }), 200)
-    elif request.path.startswith("/api/entity-context/"):
+            return _envelope("card", {"similar_cases": matches}, [m["case_id"] for m in matches])
+
+        status, payload = _run_scoped(app, logger, "/api/similar-cases", "similar-cases", work)
+        return make_response(jsonify(payload), status)
+
+    elif path.startswith("/api/entity-context/"):
         if request.method != "GET":
             return make_response(jsonify({"error": "GET only"}), 405)
-        accused_id_str = request.path.rsplit("/", 1)[-1]
+        accused_id_str = path.rsplit("/", 1)[-1]
         if not accused_id_str.isdigit():
             return make_response(jsonify({"error": "accused_id must be an integer"}), 400)
-        try:
-            zcql_service = app.zcql()
-            check_scope(resolve_app_user(app, zcql_service), "entity-context")
+
+        def work(zcql_service):
             context = get_entity_context(int(accused_id_str), zcql_service)
-        except AuthenticationRequired as e:
-            return make_response(jsonify({"error": str(e)}), 401)
-        except ForbiddenScope as e:
-            return make_response(jsonify({"error": str(e)}), 403)
-        except CaseNotFound as e:
-            return make_response(jsonify({"error": str(e)}), 404)
-        except Exception as e:  # noqa: BLE001 — surfaced to the caller, not swallowed
-            logger.error(f"/api/entity-context error: {e}")
-            return make_response(jsonify({"error": str(e)}), 500)
-        return make_response(jsonify({
-            "response_type": "card",
-            "data": context,
-            "cited_case_ids": context["past_case_ids"],
-            "generated_sql": "",
-            "confidence_score": 1.0,
-            "follow_up_questions": [],
-        }), 200)
-    elif request.path.startswith("/api/risk-score/"):
+            return _envelope("card", context, context["past_case_ids"])
+
+        status, payload = _run_scoped(app, logger, "/api/entity-context", "entity-context", work)
+        return make_response(jsonify(payload), status)
+
+    elif path.startswith("/api/risk-score/"):
         if request.method != "GET":
             return make_response(jsonify({"error": "GET only"}), 405)
-        accused_id_str = request.path.rsplit("/", 1)[-1]
+        accused_id_str = path.rsplit("/", 1)[-1]
         if not accused_id_str.isdigit():
             return make_response(jsonify({"error": "accused_id must be an integer"}), 400)
-        try:
-            zcql_service = app.zcql()
-            check_scope(resolve_app_user(app, zcql_service), "risk-score")
+
+        def work(zcql_service):
             result = get_risk_score(int(accused_id_str), zcql_service)
-        except AuthenticationRequired as e:
-            return make_response(jsonify({"error": str(e)}), 401)
-        except ForbiddenScope as e:
-            return make_response(jsonify({"error": str(e)}), 403)
-        except CaseNotFound as e:
-            return make_response(jsonify({"error": str(e)}), 404)
-        except Exception as e:  # noqa: BLE001 — surfaced to the caller, not swallowed
-            logger.error(f"/api/risk-score error: {e}")
-            return make_response(jsonify({"error": str(e)}), 500)
-        return make_response(jsonify({
-            "response_type": "card",
-            "data": result,
-            "cited_case_ids": [],
-            "generated_sql": "",
-            "confidence_score": result["risk_score"],
-            "follow_up_questions": [],
-        }), 200)
-    elif request.path == "/api/aggregates":
+            return _envelope("card", result, confidence_score=result["risk_score"])
+
+        status, payload = _run_scoped(app, logger, "/api/risk-score", "risk-score", work)
+        return make_response(jsonify(payload), status)
+
+    elif path == "/api/aggregates":
         if request.method != "GET":
             return make_response(jsonify({"error": "GET only"}), 405)
         agg_type = request.args.get("type")
-        try:
-            zcql_service = app.zcql()
-            check_scope(resolve_app_user(app, zcql_service), "aggregates")
+
+        def work(zcql_service):
             data = get_aggregates(
                 zcql_service, agg_type,
                 request.args.get("date_from"), request.args.get("date_to"), request.args.get("crime_type"),
             )
-        except AuthenticationRequired as e:
-            return make_response(jsonify({"error": str(e)}), 401)
-        except ForbiddenScope as e:
-            return make_response(jsonify({"error": str(e)}), 403)
-        except InvalidAggregateType as e:
-            return make_response(jsonify({"error": str(e)}), 400)
-        except Exception as e:  # noqa: BLE001 — surfaced to the caller, not swallowed
-            logger.error(f"/api/aggregates error: {e}")
-            return make_response(jsonify({"error": str(e)}), 500)
-        return make_response(jsonify({
-            "response_type": "chart",
-            "data": data,
-            "cited_case_ids": [],
-            "generated_sql": "",
-            "confidence_score": 1.0,
-            "follow_up_questions": [],
-        }), 200)
-    elif request.path == "/api/hotspots":
+            return _envelope("chart", data)
+
+        status, payload = _run_scoped(
+            app, logger, "/api/aggregates", "aggregates", work,
+            extra_status=((InvalidAggregateType, 400),),
+        )
+        return make_response(jsonify(payload), status)
+
+    elif path == "/api/hotspots":
         if request.method != "GET":
             return make_response(jsonify({"error": "GET only"}), 405)
-        try:
-            zcql_service = app.zcql()
-            check_scope(resolve_app_user(app, zcql_service), "hotspots")
+
+        def work(zcql_service):
             data = get_hotspots(
                 zcql_service,
                 request.args.get("date_from"), request.args.get("date_to"), request.args.get("crime_type"),
             )
-        except AuthenticationRequired as e:
-            return make_response(jsonify({"error": str(e)}), 401)
-        except ForbiddenScope as e:
-            return make_response(jsonify({"error": str(e)}), 403)
-        except Exception as e:  # noqa: BLE001 — surfaced to the caller, not swallowed
-            import traceback
-            tb = traceback.format_exc()
-            logger.error(f"/api/hotspots error: {tb}")
-            return make_response(jsonify({"error": str(e), "traceback": tb}), 500)
-        return make_response(jsonify({
-            "response_type": "map",
-            "data": data,
-            "cited_case_ids": [int(x) for x in sorted({int(cid) for c in data.get("clusters", []) for cid in c.get("case_ids", [])})],
-            "generated_sql": "",
-            "confidence_score": 1.0,
-            "follow_up_questions": [],
-        }), 200)
-    elif request.path.startswith("/api/financial-trail/"):
+            cited = sorted({int(cid) for c in data.get("clusters", []) for cid in c.get("case_ids", [])})
+            return _envelope("map", data, cited)
+
+        status, payload = _run_scoped(app, logger, "/api/hotspots", "hotspots", work)
+        return make_response(jsonify(payload), status)
+
+    elif path == "/api/pcr-dispatch":
         if request.method != "GET":
             return make_response(jsonify({"error": "GET only"}), 405)
-        case_id_str = request.path.rsplit("/", 1)[-1]
-        if not case_id_str.isdigit():
-            return make_response(jsonify({"error": "case_id must be an integer"}), 400)
-        try:
-            zcql_service = app.zcql()
-            check_scope(resolve_app_user(app, zcql_service), "financial-trail")
-            trail = get_financial_trail(int(case_id_str), zcql_service)
-        except AuthenticationRequired as e:
-            return make_response(jsonify({"error": str(e)}), 401)
-        except ForbiddenScope as e:
-            return make_response(jsonify({"error": str(e)}), 403)
-        except CaseNotFound as e:
-            return make_response(jsonify({"error": str(e)}), 404)
-        except Exception as e:  # noqa: BLE001 — surfaced to the caller, not swallowed
-            logger.error(f"/api/financial-trail error: {e}")
-            return make_response(jsonify({"error": str(e)}), 500)
-        return make_response(jsonify({
-            "response_type": "card",
-            "data": trail,
-            "cited_case_ids": [int(case_id_str)],
-            "generated_sql": "",
-            "confidence_score": 1.0,
-            "follow_up_questions": [],
-        }), 200)
-    elif request.path.startswith("/api/evidence/"):
+
+        def work(zcql_service):
+            dispatches = get_active_dispatches(zcql_service)
+            return _envelope("map", {"dispatches": dispatches}, [d["case_id"] for d in dispatches])
+
+        status, payload = _run_scoped(app, logger, "/api/pcr-dispatch", "pcr-dispatch", work)
+        return make_response(jsonify(payload), status)
+
+    elif path == "/api/sos-alerts":
         if request.method != "GET":
             return make_response(jsonify({"error": "GET only"}), 405)
-        case_id_str = request.path.rsplit("/", 1)[-1]
-        if not case_id_str.isdigit():
-            return make_response(jsonify({"error": "case_id must be an integer"}), 400)
-        try:
-            zcql_service = app.zcql()
-            check_scope(resolve_app_user(app, zcql_service), "evidence")
-            items = get_evidence(int(case_id_str), zcql_service)
-        except AuthenticationRequired as e:
-            return make_response(jsonify({"error": str(e)}), 401)
-        except ForbiddenScope as e:
-            return make_response(jsonify({"error": str(e)}), 403)
-        except CaseNotFound as e:
-            return make_response(jsonify({"error": str(e)}), 404)
-        except Exception as e:  # noqa: BLE001 — surfaced to the caller, not swallowed
-            logger.error(f"/api/evidence error: {e}")
-            return make_response(jsonify({"error": str(e)}), 500)
-        return make_response(jsonify({
-            "response_type": "evidence",
-            "data": {"items": items},
-            "cited_case_ids": [int(case_id_str)],
-            "generated_sql": "",
-            "confidence_score": 1.0,
-            "follow_up_questions": [],
-        }), 200)
-    elif request.path == "/api/admin/backfill-evidence-stratus":
+
+        def work(zcql_service):
+            return _envelope("text", {"alerts": get_active_sos_alerts()})
+
+        status, payload = _run_scoped(app, logger, "/api/sos-alerts", "sos-alerts", work)
+        return make_response(jsonify(payload), status)
+
+    elif path == "/api/voice/transcribe":
         if request.method != "POST":
             return make_response(jsonify({"error": "POST only"}), 405)
-        try:
-            zcql_service = app.zcql()
-            check_scope(resolve_app_user(app, zcql_service), "admin-backfill-evidence")
-            result = backfill_evidence_stratus(app, zcql_service)
-        except AuthenticationRequired as e:
-            return make_response(jsonify({"error": str(e)}), 401)
-        except ForbiddenScope as e:
-            return make_response(jsonify({"error": str(e)}), 403)
-        except Exception as e:  # noqa: BLE001 — surfaced to the caller, not swallowed
-            logger.error(f"/api/admin/backfill-evidence-stratus error: {e}")
-            return make_response(jsonify({"error": str(e)}), 500)
-        return make_response(jsonify(result), 200)
-    elif request.path.startswith("/api/conversation/") and request.path.endswith("/export"):
+        audio_bytes = request.get_data()
+        if not audio_bytes:
+            return make_response(jsonify({"error": "missing audio body"}), 400)
+        hint_language = request.args.get("language")  # optional "en" | "kn"
+
+        def work(zcql_service):
+            result = transcribe(audio_bytes, hint_language=hint_language)
+            return _envelope("text", result)
+
+        status, payload = _run_scoped(
+            app, logger, "/api/voice/transcribe", "voice", work,
+            extra_status=((VoiceError, 400),),
+        )
+        return make_response(jsonify(payload), status)
+
+    elif path.startswith("/api/financial-trail/"):
         if request.method != "GET":
             return make_response(jsonify({"error": "GET only"}), 405)
-        session_id_str = request.path.split("/")[3] if len(request.path.split("/")) > 3 else ""
+        case_id_str = path.rsplit("/", 1)[-1]
+        if not case_id_str.isdigit():
+            return make_response(jsonify({"error": "case_id must be an integer"}), 400)
+
+        def work(zcql_service):
+            trail = get_financial_trail(int(case_id_str), zcql_service)
+            return _envelope("card", trail, [int(case_id_str)])
+
+        status, payload = _run_scoped(app, logger, "/api/financial-trail", "financial-trail", work)
+        return make_response(jsonify(payload), status)
+
+    elif path.startswith("/api/evidence/"):
+        if request.method != "GET":
+            return make_response(jsonify({"error": "GET only"}), 405)
+        case_id_str = path.rsplit("/", 1)[-1]
+        if not case_id_str.isdigit():
+            return make_response(jsonify({"error": "case_id must be an integer"}), 400)
+
+        def work(zcql_service):
+            items = get_evidence(int(case_id_str), zcql_service)
+            return _envelope("evidence", {"items": items}, [int(case_id_str)])
+
+        status, payload = _run_scoped(app, logger, "/api/evidence", "evidence", work)
+        return make_response(jsonify(payload), status)
+
+    elif path == "/api/admin/backfill-evidence-stratus":
+        if request.method != "POST":
+            return make_response(jsonify({"error": "POST only"}), 405)
+
+        def work(zcql_service):
+            return backfill_evidence_stratus(app, zcql_service)
+
+        status, payload = _run_scoped(app, logger, "/api/admin/backfill-evidence-stratus", "admin-backfill-evidence", work)
+        return make_response(jsonify(payload), status)
+
+    elif path.startswith("/api/conversation/") and path.endswith("/export"):
+        if request.method != "GET":
+            return make_response(jsonify({"error": "GET only"}), 405)
+        path_parts = path.split("/")
+        session_id_str = path_parts[3] if len(path_parts) > 3 else ""
         if not session_id_str.isdigit():
             return make_response(jsonify({"error": "session_id must be an integer"}), 400)
         try:
@@ -356,14 +330,7 @@ def handler(request: Request):
         response.headers["Content-Type"] = "application/pdf"
         response.headers["Content-Disposition"] = f"attachment; filename=conversation_{session_id_str}.pdf"
         return response
-    elif request.path == "/cache":
-        default_segment = app.cache().segment()
 
-        insert_resp = default_segment.put('Name', 'DefaultName')
-        logger.info('Inserted cache : ' + str(insert_resp))
-        get_resp = default_segment.get('Name')
-
-        return jsonify(get_resp), 200
     else:
         response = make_response('Unknown path')
         response.status_code = 400

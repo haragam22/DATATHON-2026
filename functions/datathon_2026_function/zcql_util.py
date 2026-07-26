@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from zcatalyst_sdk.exceptions import CatalystAPIError, CatalystZCQLError
+
 
 class ZcqlError(Exception):
     pass
@@ -22,7 +24,10 @@ class CaseNotFound(Exception):
 
 
 def run(zcql_service: Any, sql: str) -> list[dict[str, Any]]:
-    raw_rows = zcql_service.execute_query(sql)
+    try:
+        raw_rows = zcql_service.execute_query(sql)
+    except (CatalystZCQLError, CatalystAPIError) as e:
+        raise ZcqlError(f"ZCQL execute_query failed: {e} (sql={sql!r})") from e
     if raw_rows is None:
         return []
     rows: list[dict[str, Any]] = []

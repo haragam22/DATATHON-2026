@@ -7,12 +7,29 @@
  */
 
 import { FileText } from 'lucide-react';
+import ResponseMap from './ResponseMap';
 import './ResponseRenderers.css';
+
+const LAT_KEY_RE = /^lat(itude)?$/i;
+const LON_KEY_RE = /^lon(g|gitude)?$/i;
+const COUNT_KEY_RE = /count/i;
+
+function findKey(row, re) {
+  return Object.keys(row).find((k) => re.test(k));
+}
 
 export default function ResponseCard({ envelope }) {
   const { data } = envelope;
 
   if (!data) return <div className="response-card">No data</div>;
+
+  // Pipeline's actual NL-query shape: { answer, rows, language }. Detect the
+  // rows' real content instead of dumping them as a raw JSON blob — a map
+  // when they carry coordinates, a bar list when they're a plain
+  // category+count breakdown, a table otherwise.
+  if (Array.isArray(data.rows)) {
+    return <GenericRowsCard answer={data.answer} rows={data.rows} />;
+  }
 
   // Special case: similar_cases array
   if (Array.isArray(data.similar_cases)) {
@@ -87,6 +104,106 @@ export default function ResponseCard({ envelope }) {
 }
 
 // ── Sub-components ──
+
+function GenericRowsCard({ answer, rows }) {
+  if (rows.length === 0) {
+    return (
+      <div className="response-card">
+        {answer && <p className="response-card__answer">{answer}</p>}
+        <p className="text-muted text-sm">No matching records found.</p>
+      </div>
+    );
+  }
+
+  const firstRow = rows[0];
+  const latKey = findKey(firstRow, LAT_KEY_RE);
+  const lonKey = findKey(firstRow, LON_KEY_RE);
+  const keys = Object.keys(firstRow);
+
+  // Coordinates present -> render as a map, not a table of numbers.
+  // A visual carries its own information — skip the LLM prose entirely
+  // (it's usually just the same coordinates restated as a sentence).
+  if (latKey && lonKey) {
+    const countKey = findKey(firstRow, COUNT_KEY_RE);
+    const clusters = rows
+      .filter((r) => r[latKey] != null && r[lonKey] != null)
+      .map((r) => ({
+        lat: Number(r[latKey]),
+        lon: Number(r[lonKey]),
+        count: countKey ? Number(r[countKey]) || 1 : 1,
+      }));
+    return (
+      <div className="response-card">
+        <p className="response-card__caption text-muted text-xs">
+          {clusters.length} location{clusters.length !== 1 ? 's' : ''}
+        </p>
+        <ResponseMap envelope={{ data: { clusters } }} />
+      </div>
+    );
+  }
+
+  // Exactly one numeric column + one label column -> a simple bar list.
+  // Same principle: the bars already show every value, so the caption
+  // stays short rather than repeating each row back as a sentence.
+  if (keys.length === 2) {
+    const numericKey = keys.find((k) => rows.every((r) => !isNaN(parseFloat(r[k]))));
+    const labelKey = keys.find((k) => k !== numericKey);
+    if (numericKey && labelKey) {
+      const values = rows.map((r) => parseFloat(r[numericKey]));
+      const max = Math.max(...values);
+      return (
+        <div className="response-card">
+          <p className="response-card__caption text-muted text-xs">
+            {rows.length} result{rows.length !== 1 ? 's' : ''}, by {formatKey(numericKey)}
+          </p>
+          <ul className="response-card__barlist">
+            {rows.map((r, i) => (
+              <li key={i} className="response-card__barlist-row">
+                <span className="response-card__barlist-label font-mono text-xs">
+                  {formatKey(labelKey)} {r[labelKey]}
+                </span>
+                <div className="response-card__barlist-track">
+                  <div
+                    className="response-card__barlist-fill"
+                    style={{ width: `${(values[i] / max) * 100}%` }}
+                  />
+                </div>
+                <span className="response-card__barlist-value font-mono text-xs">{r[numericKey]}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    }
+  }
+
+  // Fallback: a real table, not a raw JSON dump
+  return (
+    <div className="response-card">
+      {answer && <p className="response-card__answer">{answer}</p>}
+      <div className="response-card__table-wrap">
+        <table className="response-card__table font-mono text-xs">
+          <thead>
+            <tr>
+              {keys.map((k) => (
+                <th key={k}>{formatKey(k)}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i}>
+                {keys.map((k) => (
+                  <td key={k}>{String(r[k])}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 function SimilarCaseCard({ caseData }) {
   const { case_id, similarity_score, crime_no, brief_facts, ...rest } = caseData;

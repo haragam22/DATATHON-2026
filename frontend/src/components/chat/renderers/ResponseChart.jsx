@@ -21,16 +21,18 @@ import {
 } from 'recharts';
 import './ResponseRenderers.css';
 
-// Chart color palette — ksp-blue first, then complementary muted tones
+// Chart color palette — evidence amber leads (the primary accent), navy
+// last since it has near-zero contrast against the navy app shell in the
+// default (dark) theme.
 const COLORS = [
-  '#2C5AA0', // ksp-blue
-  '#C6A24D', // ksp-gold
-  '#4C8067', // signal-green
-  '#C68A3D', // signal-amber
-  '#B8493A', // signal-red
-  '#6B7DB3', // muted blue
-  '#8B6F9E', // muted purple
-  '#5E8A8A', // muted teal
+  '#E8A33D', // ksp-gold (evidence amber)
+  '#1F7A8C', // verification teal
+  '#3B8F6D', // signal-green
+  '#B23A34', // signal-red
+  '#3D6FA8', // hotspot cold blue
+  '#8A6A2E', // muted amber
+  '#5A8A9E', // muted teal
+  '#16233D', // ksp-blue (navy) — last, low contrast on dark theme
 ];
 
 // Recharts custom tooltip styled to match design tokens

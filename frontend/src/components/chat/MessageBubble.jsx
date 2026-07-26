@@ -27,7 +27,7 @@ export default function MessageBubble({ message, onSelectCaseId }) {
 
 function UserBubble({ message }) {
   return (
-    <div className="msg msg--user">
+    <div className="msg msg--user msg--enter">
       <div className="msg__content msg__content--user">
         <p>{message.content}</p>
       </div>

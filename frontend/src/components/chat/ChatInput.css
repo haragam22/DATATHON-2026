@@ -9,8 +9,8 @@
 
 .chat-input__lang-banner {
   padding: var(--space-1) var(--space-3);
-  background: rgba(198, 162, 77, 0.1);
-  border: 1px solid rgba(198, 162, 77, 0.3);
+  background: rgba(140, 122, 69, 0.1);
+  border: 1px solid rgba(140, 122, 69, 0.3);
   border-radius: var(--radius-chip);
 }
 
@@ -22,11 +22,12 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
   padding: var(--space-2) var(--space-3);
-  transition: border-color 150ms var(--ease-out);
+  transition: border-color 150ms var(--ease-out), box-shadow 150ms var(--ease-out);
 }
 
 .chat-input__container:focus-within {
-  border-color: var(--ksp-blue);
+  border-color: var(--ksp-gold);
+  box-shadow: 0 0 0 3px rgba(232, 163, 61, 0.15);
 }
 
 .chat-input__lang-btn {
@@ -51,7 +52,7 @@
 }
 
 .chat-input__lang-btn.active-gold {
-  background: rgba(198, 162, 77, 0.15);
+  background: rgba(140, 122, 69, 0.15);
   border-color: var(--ksp-gold);
   color: var(--ksp-gold);
   font-weight: 600;
@@ -89,11 +90,11 @@
 
 .chat-input__mic:hover {
   color: var(--ksp-gold);
-  background: rgba(198, 162, 77, 0.15);
+  background: rgba(140, 122, 69, 0.15);
 }
 
 .chat-input__mic.listening {
-  background: rgba(229, 62, 62, 0.15);
+  background: rgba(169, 61, 36, 0.12);
   border: 1px solid var(--signal-red);
 }
 
@@ -108,9 +109,10 @@
 
 .chat-input__send {
   flex-shrink: 0;
-  color: var(--ksp-blue);
+  color: var(--ksp-gold);
   padding: var(--space-1);
   border-radius: var(--radius-chip);
+  transition: background 120ms var(--ease-out), transform 100ms var(--ease-out);
 }
 
 .chat-input__send:disabled {
@@ -119,7 +121,12 @@
 }
 
 .chat-input__send:not(:disabled):hover {
-  background: rgba(44, 90, 160, 0.15);
+  background: rgba(232, 163, 61, 0.15);
+  transform: scale(1.08);
+}
+
+.chat-input__send:not(:disabled):active {
+  transform: scale(0.92);
 }
 
 .chat-input__spinner {

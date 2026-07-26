@@ -5,7 +5,10 @@
 
 import { useEffect, useRef } from 'react';
 import { useChat } from '../../context/ChatContext';
+import { useRole } from '../../context/RoleContext';
 import MessageBubble from './MessageBubble';
+import NetworkDots from './NetworkDots';
+import logo from '../../assets/logo.png';
 import './MessageList.css';
 
 export default function MessageList() {
@@ -39,46 +42,40 @@ export default function MessageList() {
 
 function EmptyState() {
   const { sendMessage } = useChat();
+  const { role } = useRole();
 
+  // Ordered so the two visual-shaped answers (map, category breakdown) lead —
+  // these reliably render a map/bar-list card, not just prose. Sourced from
+  // docs/sample_questions.md, verified live against the backend.
   const starterPrompts = [
+    'Map crime hotspots across Karnataka',
     'Show top 5 crime categories in Bengaluru City',
     'How many murder cases were registered in 2024?',
     'List repeat offenders with >2 prior cases',
-    'Map crime hotspots across Karnataka',
   ];
+
+  const hour = new Date().getHours();
+  const timeGreeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   return (
     <div className="message-list__empty">
-      <div className="message-list__empty-icon" aria-hidden="true">
-        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-          <circle cx="24" cy="24" r="23" stroke="var(--line-700)" strokeWidth="1" />
-          <circle cx="24" cy="24" r="16" stroke="var(--line-700)" strokeWidth="1" strokeDasharray="4 3" />
-          <text
-            x="24"
-            y="26"
-            textAnchor="middle"
-            fill="var(--text-600)"
-            fontFamily="var(--font-mono)"
-            fontSize="11"
-          >
-            KSP
-          </text>
-        </svg>
-      </div>
-      <p className="text-muted text-sm font-medium">
-        KSP Crime Intelligence Assistant
-      </p>
-      <p className="text-faint text-xs">
-        Ask natural language questions to query live crime records, network graphs, and hotspot overlays.
-      </p>
+      <NetworkDots />
 
-      <div className="message-list__starters">
-        <span className="label-section text-xs block margin-top-1">Suggested Queries</span>
-        <div className="message-list__starter-grid">
+      <div className="message-list__empty-content">
+        <img src={logo} alt="" className="message-list__logo" aria-hidden="true" />
+
+        <h1 className="message-list__greeting">
+          {timeGreeting}{role ? `, ${role}` : ''}
+        </h1>
+        <p className="text-muted text-sm">
+          Ask a question about KSP case records, network relationships, or crime hotspots.
+        </p>
+
+        <div className="message-list__starters">
           {starterPrompts.map((prompt, idx) => (
             <button
               key={idx}
-              className="chip chip-blue message-list__starter-btn font-mono text-xs"
+              className="message-list__starter-btn font-mono text-xs"
               onClick={() => sendMessage(prompt)}
             >
               {prompt}

@@ -5,7 +5,7 @@
   align-items: center;
   gap: var(--space-1);
   padding: var(--space-1) var(--space-2);
-  background: rgba(15, 22, 38, 0.6);
+  background: rgba(34, 31, 23, 0.06);
   border-radius: 20px;
   cursor: pointer;
   user-select: none;
@@ -32,23 +32,26 @@
   position: relative;
 }
 
-/* Band: High (≥80%) — Solid Gold Ring */
+/* Band: High (≥80%) — Solid sealing-wax-ink ring (real govt stamps are red ink, not gold foil).
+   The ring carries the color signal; the number/label stay high-contrast
+   text so they're always legible, not tinted to the (often dark/muted)
+   band color. */
 .v-stamp--high .v-stamp__seal {
-  border: 2px solid var(--ksp-gold);
-  color: var(--ksp-gold);
+  border: 2px solid var(--stamp-ink);
+  color: var(--color-text);
   animation: stamp-down 120ms var(--ease-out) both;
 }
 
-/* Band: Medium (50–79%) — Dashed Gold Ring */
+/* Band: Medium (50–79%) — Dashed ink ring */
 .v-stamp--medium .v-stamp__seal {
-  border: 2px dashed var(--ksp-gold);
-  color: var(--ksp-gold);
+  border: 2px dashed var(--stamp-ink);
+  color: var(--color-text);
 }
 
 /* Band: Low (<50%) — Dashed Signal Red Ring */
 .v-stamp--low .v-stamp__seal {
   border: 2px dashed var(--signal-red);
-  color: var(--signal-red);
+  color: var(--color-text);
 }
 
 /* ── Abstention state ── */

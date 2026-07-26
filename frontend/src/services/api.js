@@ -238,6 +238,26 @@ export async function getEvidence(caseId) {
 }
 
 /**
+ * GET /api/pcr-dispatch
+ * Returns response_type: "map", data.dispatches: [{case_id, lat, lon, van_id, eta_minutes, dispatched_at}]
+ * Stateless — each call returns a freshly-sampled set. Poll on an interval (e.g. 30s) for the "live" feel.
+ */
+export async function getPcrDispatch() {
+  const { data } = await client.get('/api/pcr-dispatch');
+  return data;
+}
+
+/**
+ * GET /api/sos-alerts
+ * Returns response_type: "text", data.alerts: [{emergency_type, caller_name, caller_phone, lat, lon, received_at}]
+ * Stateless, synthetic — 0-2 alerts per call. Poll on an interval (e.g. 15-30s).
+ */
+export async function getSosAlerts() {
+  const { data } = await client.get('/api/sos-alerts');
+  return data;
+}
+
+/**
  * GET /api/conversation/<session_id>/export
  * Returns raw application/pdf bytes — NOT JSON.
  * Caller is responsible for creating a blob URL.

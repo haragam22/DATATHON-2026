@@ -14,9 +14,12 @@ Catalyst-native) speech API is confirmed to exist.
 
 from __future__ import annotations
 
+import logging
 from typing import Literal
 
 import quickml_client
+
+logger = logging.getLogger()
 
 Language = Literal["en", "kn", "mixed"]
 
@@ -75,11 +78,20 @@ def translate_to_kannada(text: str) -> str:
 
 def preprocess_question(question: str) -> tuple[str, Language]:
     """Returns (english_question, detected_language). english_question is
-    the original text unchanged when already English."""
-    language = detect_language(question)
-    if language == "en":
-        return question, language
-    return translate_to_english(question), language
+    the original text unchanged when already English.
+
+    Degrades to treating the input as English on any QuickML failure —
+    matches this pipeline's graceful-degradation philosophy (confidence
+    penalties elsewhere) rather than hard-failing the whole request just
+    because the Kannada path specifically hit a transient LLM error."""
+    try:
+        language = detect_language(question)
+        if language == "en":
+            return question, language
+        return translate_to_english(question), language
+    except Exception as e:  # noqa: BLE001 — logged, degrade to English rather than kill the pipeline
+        logger.error(f"language.preprocess_question failed, falling back to English: {e}")
+        return question, "en"
 
 
 def postprocess_answer(answer: str, language: Language) -> str:

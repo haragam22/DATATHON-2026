@@ -3,6 +3,17 @@
    Each renderer component imports this single file.
    ============================================================ */
 
+/* ── Shared entrance motion ── */
+@keyframes content-settle {
+  from { opacity: 0; transform: translateY(4px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes tile-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* ── ResponseText ── */
 .response-text {
   font-size: var(--text-sm);
@@ -36,8 +47,91 @@
   font-size: var(--text-sm);
 }
 
+.response-card__answer {
+  color: var(--color-text);
+  line-height: var(--leading-relaxed);
+  margin: 0 0 var(--space-3);
+}
+
+.response-card__caption {
+  margin: 0 0 var(--space-2);
+}
+
 .response-card__header {
   margin-bottom: var(--space-3);
+}
+
+/* Bar list — plain category+count breakdown, e.g. "top 5 crime categories" */
+.response-card__barlist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.response-card__barlist-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 2fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.response-card__barlist-label {
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.response-card__barlist-track {
+  height: 8px;
+  background: var(--color-surface);
+  border-radius: var(--radius-chip);
+  overflow: hidden;
+}
+
+.response-card__barlist-fill {
+  height: 100%;
+  background: var(--ksp-gold);
+  border-radius: var(--radius-chip);
+}
+
+.response-card__barlist-value {
+  color: var(--color-text);
+  text-align: right;
+}
+
+/* Row-shaped fallback table — replaces the raw JSON dump */
+.response-card__table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+}
+
+.response-card__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.response-card__table th,
+.response-card__table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.response-card__table th {
+  color: var(--color-text-muted);
+  font-weight: var(--weight-medium);
+  background: var(--color-surface);
+}
+
+.response-card__table tr:last-child td {
+  border-bottom: none;
+}
+
+.response-card__table td {
+  color: var(--color-text);
 }
 
 .response-card__grid {
@@ -51,6 +145,15 @@
   flex-wrap: wrap;
   gap: var(--space-2);
 }
+
+.response-card__chips > .chip {
+  animation: tile-in 200ms var(--ease-out) both;
+}
+
+.response-card__chips > .chip:nth-child(2) { animation-delay: 30ms; }
+.response-card__chips > .chip:nth-child(3) { animation-delay: 60ms; }
+.response-card__chips > .chip:nth-child(4) { animation-delay: 90ms; }
+.response-card__chips > .chip:nth-child(n+5) { animation-delay: 120ms; }
 
 .response-card__dl {
   display: flex;
@@ -91,7 +194,13 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  animation: tile-in 220ms var(--ease-out) both;
 }
+
+.response-card__grid > .similar-case-card:nth-child(2) { animation-delay: 40ms; }
+.response-card__grid > .similar-case-card:nth-child(3) { animation-delay: 80ms; }
+.response-card__grid > .similar-case-card:nth-child(4) { animation-delay: 120ms; }
+.response-card__grid > .similar-case-card:nth-child(n+5) { animation-delay: 160ms; }
 
 .similar-case-card__header {
   display: flex;
@@ -121,7 +230,8 @@
 
 .response-chart__container {
   width: 100%;
-  min-height: 280px;
+  min-height: 400px;
+  animation: content-settle 280ms var(--ease-out) 60ms both;
 }
 
 /* Recharts tooltip override */
@@ -155,10 +265,11 @@
 
 .response-map__container {
   width: 100%;
-  height: 340px;
+  height: 520px;
   border-radius: var(--radius-card);
   border: 1px solid var(--color-border);
   overflow: hidden;
+  animation: content-settle 280ms var(--ease-out) 60ms both;
 }
 
 /* Leaflet tooltip override for dark theme */
@@ -218,11 +329,12 @@
 
 .response-network__canvas {
   width: 100%;
-  height: 400px;
+  height: 520px;
   border-radius: var(--radius-card);
   border: 1px solid var(--color-border);
   overflow: hidden;
   position: relative;
+  animation: content-settle 280ms var(--ease-out) 60ms both;
 }
 
 .response-network__canvas canvas {
@@ -259,8 +371,17 @@
   padding: var(--space-3);
   overflow: hidden;
   cursor: pointer;
-  transition: border-color 150ms var(--ease-out), background 150ms var(--ease-out);
+  transition: border-color 150ms var(--ease-out), background 150ms var(--ease-out), transform 150ms var(--ease-out);
+  animation: tile-in 220ms var(--ease-out) both;
 }
+
+.evidence-tile:hover {
+  transform: translateY(-2px);
+}
+
+.response-evidence__grid > .evidence-tile:nth-child(2) { animation-delay: 40ms; }
+.response-evidence__grid > .evidence-tile:nth-child(3) { animation-delay: 80ms; }
+.response-evidence__grid > .evidence-tile:nth-child(n+4) { animation-delay: 120ms; }
 
 .evidence-tile:hover {
   background: var(--ink-800);

@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import HotspotMap from './HotspotMap';
 import TrendCharts from './TrendCharts';
+import PcrDispatchPanel from './PcrDispatchPanel';
 import './DashboardPage.css';
 
 export default function DashboardPage() {
@@ -80,6 +81,11 @@ export default function DashboardPage() {
         <div className="dashboard-page__analytics-panel">
           <TrendCharts />
         </div>
+      </div>
+
+      {/* ── PCR Dispatch: Feature 2 ── */}
+      <div className="dashboard-page__ops-panel">
+        <PcrDispatchPanel />
       </div>
 
       {/* ── Bottom Section: Patrol Recommendation Feed ── */}

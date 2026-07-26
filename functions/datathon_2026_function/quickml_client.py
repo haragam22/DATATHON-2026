@@ -52,13 +52,6 @@ def _access_token() -> str:
     return _token_cache["access_token"]
 
 
-def get_access_token() -> str:
-    """Public alias — the same self-client OAuth token also authenticates
-    the Zia AutoML predict endpoint (risk_score.py, Phase 15), just with a
-    different Authorization header prefix (Zoho-oauthtoken, not Bearer)."""
-    return _access_token()
-
-
 def chat(
     messages: list[dict[str, str]], *, max_tokens: int = 500, temperature: float = 0.7,
     enable_thinking: bool = False,

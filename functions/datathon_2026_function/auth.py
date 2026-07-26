@@ -27,19 +27,25 @@ what's actually been written to the Data Store.
 
 from __future__ import annotations
 
+import logging
 import os
 from datetime import datetime, timezone
 from typing import Any
 
 import zcql_util
 
+logger = logging.getLogger()
+
 _ALLOW_UNAUTHENTICATED = os.environ.get("ALLOW_UNAUTHENTICATED", "").lower() == "true"
 
+_BASE_SCOPES = {"query", "network", "similar-cases", "aggregates", "hotspots", "evidence", "conversation-export", "voice", "pcr-dispatch", "sos-alerts"}
+_SENSITIVE_SCOPES = {"entity-context", "risk-score", "financial-trail"}
+
 ROLE_SCOPES: dict[str, set[str]] = {
-    "Investigator": {"query", "network", "similar-cases", "aggregates", "hotspots", "evidence", "conversation-export"},
-    "Analyst": {"query", "network", "similar-cases", "aggregates", "hotspots", "evidence", "conversation-export"},
-    "Supervisor": {"query", "network", "similar-cases", "aggregates", "hotspots", "evidence", "conversation-export", "entity-context", "risk-score", "financial-trail"},
-    "Policymaker": {"query", "network", "similar-cases", "aggregates", "hotspots", "evidence", "conversation-export", "entity-context", "risk-score", "financial-trail", "admin-backfill-evidence"},
+    "Investigator": set(_BASE_SCOPES),
+    "Analyst": set(_BASE_SCOPES),
+    "Supervisor": _BASE_SCOPES | _SENSITIVE_SCOPES,
+    "Policymaker": _BASE_SCOPES | _SENSITIVE_SCOPES | {"admin-backfill-evidence"},
 }
 
 
@@ -101,7 +107,7 @@ def check_scope(app_user: dict[str, Any] | None, endpoint: str) -> None:
         raise ForbiddenScope(f"role {role_name!r} is not permitted to access {endpoint!r}")
 
 
-def log_query(
+def write_audit_log(
     app: Any, app_user: dict[str, Any] | None, question: str, generated_sql: str, result_row_count: int,
 ) -> None:
     """Writes one AuditLog row for a completed /api/query call."""
@@ -117,9 +123,6 @@ def log_query(
         })
     except Exception as e:
         logger.warning(f"AuditLog write failed: {e}")
-
-
-write_audit_log = log_query
 
 
 def _demo() -> None:

@@ -1,0 +1,109 @@
+/* ── Notification Bell ── */
+
+.notification-bell {
+  position: relative;
+}
+
+.notification-bell__trigger {
+  position: relative;
+}
+
+.notification-bell__badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: var(--signal-red);
+  color: #EDE7D6;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  animation: bell-badge-in 200ms var(--ease-out) both;
+}
+
+@keyframes bell-badge-in {
+  0%   { transform: scale(0); opacity: 0; }
+  70%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+.notification-bell__panel {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  width: 320px;
+  max-height: 400px;
+  overflow-y: auto;
+  z-index: 500;
+}
+
+.notification-bell__panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  background: var(--color-surface-raised);
+}
+
+.notification-bell__clear {
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color 120ms var(--ease-out);
+}
+
+.notification-bell__clear:hover {
+  color: var(--ksp-gold);
+}
+
+.notification-bell__empty {
+  padding: var(--space-6) var(--space-3);
+  text-align: center;
+}
+
+.notification-bell__list {
+  list-style: none;
+}
+
+.notification-bell__item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.notification-bell__item:last-child {
+  border-bottom: none;
+}
+
+.notification-bell__item-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.notification-bell__item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.notification-bell__item-type {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text);
+}
+
+.notification-bell__item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}

@@ -4,9 +4,9 @@
  *
  * design.md:
  *   - Nodes: circle, initials avatar, ring colored by role
- *     accused = signal-red, victim = ksp-blue, associate/witness = text-400
- *   - Edges: thin line-700, labeled on hover only
- *   - Selected node: ksp-gold glow ring
+ *     accused = case red, victim = verification teal, associate/witness = slate steel
+ *   - Edges: thin slate steel, labeled on hover only
+ *   - Selected node: evidence amber ring (flat, no glow — see Dark-Canvas Exception)
  *   - NEVER photos — initials in a ring only
  */
 
@@ -14,15 +14,16 @@ import { useRef, useState, useMemo, useCallback, useEffect } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import './ResponseRenderers.css';
 
-// Role → ring color mapping (from design.md)
+// Role → ring color mapping (from design.md). Navy is avoided here — it's
+// the canvas's own background color, so a navy ring would be invisible.
 const ROLE_COLORS = {
-  accused: '#B8493A',    // signal-red
-  suspect: '#B8493A',
-  victim: '#2C5AA0',     // ksp-blue
-  complainant: '#2C5AA0',
-  associate: '#96A2C0',  // text-400
-  witness: '#96A2C0',
-  default: '#96A2C0',
+  accused: '#B23A34',    // case red
+  suspect: '#B23A34',
+  victim: '#1F7A8C',     // verification teal
+  complainant: '#1F7A8C',
+  associate: '#9FB0C0',  // text-400 (dark)
+  witness: '#9FB0C0',
+  default: '#9FB0C0',
 };
 
 function getRoleColor(role) {
@@ -77,21 +78,19 @@ export default function ResponseNetwork({ envelope }) {
       const ringColor = getRoleColor(node.role);
       const initials = getInitials(node.name || node.label || node.id);
 
-      // Glow for selected node
+      // Selected node: crisp flat ring, no glow (design.md: board stays flat)
       if (isSelected) {
         ctx.beginPath();
         ctx.arc(x, y, r + 4, 0, 2 * Math.PI);
-        ctx.fillStyle = 'rgba(198, 162, 77, 0.25)';
-        ctx.fill();
-        ctx.strokeStyle = '#C6A24D'; // ksp-gold
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#E8A33D'; // ksp-gold (evidence amber)
+        ctx.lineWidth = 1.5;
         ctx.stroke();
       }
 
       // Node background
       ctx.beginPath();
       ctx.arc(x, y, r, 0, 2 * Math.PI);
-      ctx.fillStyle = '#161F35'; // ink-800
+      ctx.fillStyle = '#1C2C4A'; // dark-theme raised surface
       ctx.fill();
 
       // Ring
@@ -100,7 +99,7 @@ export default function ResponseNetwork({ envelope }) {
       ctx.stroke();
 
       // Initials
-      ctx.fillStyle = '#EAEEF7'; // text-100
+      ctx.fillStyle = '#EAECEF'; // case paper
       ctx.font = `500 10px 'IBM Plex Mono', monospace`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -113,7 +112,7 @@ export default function ResponseNetwork({ envelope }) {
   const paintLink = useCallback(
     (link, ctx) => {
       const isHovered = hoveredLink === link;
-      ctx.strokeStyle = isHovered ? '#96A2C0' : '#2B3757'; // text-400 : line-700
+      ctx.strokeStyle = isHovered ? '#9FB0C0' : '#4A5A6A'; // text-400 (dark) : slate steel
       ctx.lineWidth = isHovered ? 1.5 : 0.8;
       ctx.beginPath();
       ctx.moveTo(link.source.x, link.source.y);
@@ -124,7 +123,7 @@ export default function ResponseNetwork({ envelope }) {
       if (isHovered && link.label) {
         const midX = (link.source.x + link.target.x) / 2;
         const midY = (link.source.y + link.target.y) / 2;
-        ctx.fillStyle = '#96A2C0';
+        ctx.fillStyle = '#9FB0C0';
         ctx.font = `400 10px 'IBM Plex Mono', monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -158,7 +157,7 @@ export default function ResponseNetwork({ envelope }) {
           graphData={graphData}
           width={dimensions.width}
           height={dimensions.height}
-          backgroundColor="#0A0F1C"
+          backgroundColor="#16233D"
           nodeCanvasObject={paintNode}
           nodePointerAreaPaint={(node, color, ctx) => {
             ctx.beginPath();

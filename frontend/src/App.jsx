@@ -1,27 +1,33 @@
 /**
  * App.jsx — KSP Crime Intelligence
  *
- * Routes:
- *   /            → Dashboard (Milestone 8: Hotspot map + trends + recommendations)
- *   /chat        → Chat interface (Milestones 1–4)
- *   /investigate → Investigation Board + Similar Cases + Entity Sidecar (Milestones 5–7)
+ * Chat-first shell: chat is the single entry point at "/". Investigate and
+ * Patrol stay wired as routes but are deep-link only (reached from a case
+ * citation or an in-answer action, never from top nav) — see
+ * docs/superpowers/specs (chat-first restructuring plan). DashboardPage is
+ * intentionally unrouted: its content now surfaces as chat envelope cards
+ * (hotspot map, trend charts, PCR feed) instead of a standalone page.
  */
 
 import { useState, useEffect } from 'react';
 import './App.css';
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
-import { Shield, Activity, MessageSquare, Network, ShieldCheck } from 'lucide-react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Shield, ShieldCheck } from 'lucide-react';
 import { healthCheck } from './services/api';
 import { RoleProvider } from './context/RoleContext';
+import { NotificationProvider } from './context/NotificationContext';
 import RoleSelector from './components/common/RoleSelector';
 import SecurityAuditModal from './components/common/SecurityAuditModal';
 import SystemStatusModal from './components/common/SystemStatusModal';
+import SosNotificationBar from './components/common/SosNotificationBar';
+import NotificationBell from './components/common/NotificationBell';
+import ThemeToggle from './components/common/ThemeToggle';
 
 // ---------------------------------------------------------------------------
 // Page components
 // ---------------------------------------------------------------------------
 
-import DashboardPage from './components/dashboard/DashboardPage';
+import PatrolPage from './components/dashboard/PatrolPage';
 import ChatWindow from './components/chat/ChatWindow';
 import InvestigatePage from './components/investigation/InvestigatePage';
 
@@ -45,48 +51,18 @@ export default function App() {
 
   return (
     <RoleProvider>
+      <NotificationProvider>
       <BrowserRouter>
         <div className="app-shell">
           {/* ── Top header bar ── */}
           <header className="app-header">
             <div className="app-header__brand">
-              <Shield size={18} strokeWidth={1.5} color="var(--ksp-blue)" />
+              <Shield size={18} strokeWidth={1.5} color="var(--ksp-gold)" />
               <span className="app-header__name">KSP CRIME INTELLIGENCE</span>
               <span className="app-header__sub font-mono text-xs text-faint">
                 Catalyst Datathon 2026 · PS1
               </span>
             </div>
-
-            <nav className="app-header__nav">
-              <NavLink
-                to="/"
-                end
-                className={({ isActive }) =>
-                  `app-nav-link${isActive ? ' app-nav-link--active' : ''}`
-                }
-              >
-                <Activity size={14} strokeWidth={1.5} />
-                Dashboard
-              </NavLink>
-              <NavLink
-                to="/chat"
-                className={({ isActive }) =>
-                  `app-nav-link${isActive ? ' app-nav-link--active' : ''}`
-                }
-              >
-                <MessageSquare size={14} strokeWidth={1.5} />
-                Chat
-              </NavLink>
-              <NavLink
-                to="/investigate"
-                className={({ isActive }) =>
-                  `app-nav-link${isActive ? ' app-nav-link--active' : ''}`
-                }
-              >
-                <Network size={14} strokeWidth={1.5} />
-                Investigate
-              </NavLink>
-            </nav>
 
             <div className="app-header__status flex items-center gap-3">
               {/* Security Audit Modal Trigger (Milestone 13) */}
@@ -100,6 +76,10 @@ export default function App() {
 
               <RoleSelector />
 
+              <ThemeToggle />
+
+              <NotificationBell />
+
               {/* System Status Modal Trigger (Milestone 14) */}
               <div onClick={() => setIsSystemOpen(true)} className="cursor-pointer">
                 <BackendStatusIndicator status={backendStatus} />
@@ -110,17 +90,21 @@ export default function App() {
           {/* ── Page content ── */}
           <main className="app-main">
             <Routes>
-              <Route path="/" element={<DashboardPage />} />
-              <Route path="/chat" element={<ChatWindow />} />
+              <Route path="/" element={<ChatWindow />} />
               <Route path="/investigate" element={<InvestigatePage />} />
+              <Route path="/patrol" element={<PatrolPage />} />
             </Routes>
           </main>
 
           {/* Milestone 13 & 14 Modals */}
           <SecurityAuditModal isOpen={isSecurityOpen} onClose={() => setIsSecurityOpen(false)} />
           <SystemStatusModal isOpen={isSystemOpen} onClose={() => setIsSystemOpen(false)} />
+
+          {/* Feature 4: global SOS/112 notification bar */}
+          <SosNotificationBar />
         </div>
       </BrowserRouter>
+      </NotificationProvider>
     </RoleProvider>
   );
 }

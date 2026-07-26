@@ -50,7 +50,7 @@
 }
 
 .similar-cases-panel__input:focus {
-  border-color: var(--ksp-blue);
+  border-color: var(--ksp-gold);
   outline: none;
 }
 
@@ -96,7 +96,7 @@
 }
 
 .similar-case-item:hover {
-  border-color: var(--ksp-blue);
+  border-color: var(--ksp-gold);
   background: var(--ink-700);
 }
 

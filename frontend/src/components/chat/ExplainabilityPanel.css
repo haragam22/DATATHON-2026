@@ -59,12 +59,12 @@
 
 .explainability-case-chip {
   cursor: pointer;
-  border: 1px solid var(--ksp-blue);
+  border: 1px solid var(--stamp-ink);
   transition: background 150ms var(--ease-out);
 }
 
 .explainability-case-chip:hover {
-  background: rgba(44, 90, 160, 0.25);
+  background: rgba(31, 122, 140, 0.12);
 }
 
 .explainability-copy-btn {

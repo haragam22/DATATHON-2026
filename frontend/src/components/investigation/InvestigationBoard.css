@@ -56,7 +56,7 @@
 }
 
 .investigation-board__input:focus {
-  border-color: var(--ksp-blue);
+  border-color: var(--ksp-gold);
   outline: none;
 }
 

@@ -83,6 +83,28 @@ ALLOWED_SCHEMA: dict[str, set[str]] = {
         "EvidenceID", "CaseMasterID_FK", "EvidenceType", "FileURL",
         "Description", "UploadedDate",
     },
+    "OccupationMaster": {"OccupationID", "OccupationMater"},
+    "ReligionMaster": {"ReligionID", "ReligionName"},
+    "CasteMaster": {"caste_master_id", "caste_master_name"},
+}
+
+# Human-readable label column for each FK_EDGES target table — used by
+# pipeline.py to resolve raw FK integers in final rows to display names
+# before they reach the envelope (single-table lookup, no JOIN needed).
+LABEL_COLUMNS: dict[str, str] = {
+    "CaseStatusMaster": "CaseStatusName",
+    "CaseCategory": "LookupValue",
+    "GravityOffence": "LookupValue",
+    "CrimeHead": "CrimeGroupName",
+    "CrimeSubHead": "CrimeHeadName",
+    "Unit": "UnitName",
+    "Court": "CourtName",
+    "District": "DistrictName",
+    "State": "StateName",
+    "Employee": "FirstName",
+    "OccupationMaster": "OccupationMater",
+    "ReligionMaster": "ReligionName",
+    "CasteMaster": "caste_master_name",
 }
 
 
@@ -145,6 +167,35 @@ FK_EDGES: list[tuple[str, str, str, str]] = [
     ("Transaction", "ToAccountID_FK", "Account", "AccountID"),
     ("Evidence", "CaseMasterID_FK", "CaseMaster", "CseMasterID"),
 ]
+
+# (source_table, fk_column) -> (target_table, target_pk_column, label_column)
+# only for FK edges whose target has a declared LABEL_COLUMNS entry — the
+# set of FK columns pipeline.py should resolve to a display name post-query.
+FK_LABEL_TARGETS: dict[tuple[str, str], tuple[str, str, str]] = {
+    (a, ca): (b, cb, LABEL_COLUMNS[b])
+    for a, ca, b, cb in FK_EDGES
+    if b in LABEL_COLUMNS
+}
+
+# BOOLEAN-typed columns per table (docs/zcql.md's boolean operator table:
+# only = and != are supported, never LIKE/BETWEEN/IN/</>/<=/>=, and the
+# literal must be bare TRUE/FALSE, never a quoted string or 1/0) — used by
+# pipeline.py's validate_plan to guard this rule in code, not just prompt
+# text, so a violation is caught before it reaches ZCQL as a live 400.
+BOOLEAN_COLUMNS: dict[str, set[str]] = {
+    "Inv_OccuranceTime": {"IsOutdoor"},
+    "ArrestSurrender": {"IsAccused", "IsComplainantAccused"},
+    "Act": {"Active"},
+    "Section": {"Active"},
+    "CrimeHead": {"Active"},
+    "Court": {"Acitve"},
+    "District": {"Active"},
+    "State": {"Active"},
+    "Unit": {"Active"},
+    "Account": {"Active"},
+    "Transaction": {"Flagged"},
+    "Employee": {"PhysicallyChallenged"},
+}
 
 ADJACENT_TABLES: dict[str, set[str]] = {}
 for _a, _, _b, _ in FK_EDGES:

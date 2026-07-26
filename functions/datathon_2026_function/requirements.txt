@@ -2,3 +2,8 @@ zcatalyst-sdk==1.4.0
 pydantic>=2
 requests
 networkx
+scikit-learn
+faster-whisper
+shap
+python-dotenv
+pandas

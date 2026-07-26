@@ -13,8 +13,8 @@ import { UserCheck } from 'lucide-react';
 import './RoleSelector.css';
 
 const ROLE_COLORS = {
-  Investigator: 'var(--ink-700)',
-  Analyst:      'var(--ksp-blue)',
+  Investigator: 'var(--text-400)',
+  Analyst:      'var(--stamp-ink)',
   Supervisor:   'var(--ksp-gold)',
   Policymaker:  'var(--signal-green)',
 };

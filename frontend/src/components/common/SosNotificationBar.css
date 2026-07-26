@@ -1,0 +1,73 @@
+/* ── SOS Notification Bar CSS ── */
+
+.sos-bar {
+  position: fixed;
+  top: var(--space-3, 12px);
+  right: var(--space-3, 12px);
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+  max-width: 360px;
+}
+
+.sos-bar__toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2, 8px);
+  padding: var(--space-3, 12px);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--signal-red);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-float);
+  animation: sos-bar-slide-in 200ms var(--ease-out),
+             sos-bar-fade-out 250ms var(--ease-out) 1750ms forwards;
+}
+
+@keyframes sos-bar-slide-in {
+  from { transform: translateX(24px); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes sos-bar-fade-out {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.96); }
+}
+
+.sos-bar__icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.sos-bar__content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.sos-bar__type {
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--text-100);
+}
+
+.sos-bar__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.sos-bar__dismiss {
+  flex-shrink: 0;
+  color: var(--text-faint);
+}
+
+.sos-bar__dismiss:hover {
+  color: var(--text-100);
+}

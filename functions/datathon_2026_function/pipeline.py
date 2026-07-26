@@ -20,7 +20,10 @@ from pydantic import BaseModel, Field, ValidationError
 import language
 import quickml_client
 import zcql_util
-from schema_registry import ADJACENT_TABLES, ALLOWED_SCHEMA, render_relationships_for_prompt, render_schema_for_prompt
+from schema_registry import (
+    ADJACENT_TABLES, ALLOWED_SCHEMA, BOOLEAN_COLUMNS, FK_LABEL_TARGETS,
+    render_relationships_for_prompt, render_schema_for_prompt,
+)
 
 _SCHEMA_TEXT = render_schema_for_prompt()
 _RELATIONSHIPS_TEXT = render_relationships_for_prompt()
@@ -46,6 +49,10 @@ class QueryStep(BaseModel):
     table: str
     select: str  # a single column, or an aggregate like COUNT(CseMasterID)
     where: str = ""  # may reference {prev} for the previous step's ID list
+    group_by: str = ""  # single column, only meaningful on the final step
+    having: str = ""  # e.g. "COUNT(CseMasterID) > 5", only on the final step, requires group_by
+    order_by: str = ""  # e.g. "COUNT(CseMasterID) DESC", only on the final step
+    limit: int | None = None  # e.g. 5 for "top 5", only on the final step
     is_final: bool = False
 
 
@@ -118,7 +125,23 @@ _VERIFIER_SYSTEM_PROMPT = (
     "If the question is ambiguous or the intent misses/misreads something "
     "important, respond with exactly: "
     '{"match": false, "clarifying_question": "<one short question to ask '
-    'the user>"}. Respond with ONLY the JSON object, no prose.'
+    'the user>"}. Respond with ONLY the JSON object, no prose.\n\n'
+    "Examples:\n"
+    'Question: "How many murder cases were registered in Ballari district '
+    'in 2024?"\n'
+    'Extracted intent: {"entities": ["Ballari", "Murder"], "filters": '
+    '{"district": "Ballari", "crime_type": "Murder"}, "time_range": '
+    '"2024", "aggregation": "count"}\n'
+    'Response: {"match": true}\n'
+    "(clear: every clause in the question — district, crime type, year, "
+    "count — is captured, nothing left to guess)\n\n"
+    'Question: "What happened with that case?"\n'
+    'Extracted intent: {"entities": [], "filters": {}, "time_range": '
+    'null, "aggregation": null}\n'
+    'Response: {"match": false, "clarifying_question": "Which case are '
+    'you asking about — do you have a Case ID or FIR number?"}\n'
+    "(genuinely ambiguous: \"that case\" has no antecedent and the intent "
+    "correctly extracted nothing to act on)\n"
 )
 
 
@@ -148,17 +171,26 @@ def verify_intent(question: str, intent: QueryIntent) -> None:
 # ---------------------------------------------------------------------------
 # Schema-constrained query PLAN generation + guard
 #
-# ZCQL's JOIN requires a real console-configured Lookup relationship column
-# — confirmed live: EVERY tested _FK-named column (including textbook ones
-# like Accused.CaseMasterID_FK -> CaseMaster) fails with "No relationship
-# between tables X and Y", because this schema's _FK columns are plain
-# integers from CSV import, not Lookup-type columns. ZCQL JOIN is therefore
-# unusable on this schema. Cross-table filtering instead happens as a chain
-# of single-table SELECTs in Python — same batched, no-N+1 pattern already
-# used in network.py — with each step's WHERE clause referencing the
-# previous step's result IDs via a literal {prev} substitution, never a
-# nested SELECT (also confirmed unsupported: 'Nested Sub query is not
-# supported').
+# ZCQL's JOIN requires a declared relationship between the FK column and the
+# parent table's PK (docs/zcql.md's JOIN section) — confirmed live: EVERY
+# tested _FK-named column (including textbook ones like
+# Accused.CaseMasterID_FK -> CaseMaster) fails with "No relationship between
+# tables X and Y", because this schema's _FK columns are plain integers from
+# CSV import, never declared as a real relationship/Lookup-type column. ZCQL
+# JOIN is therefore unusable on THIS schema, not on ZCQL in general — if a
+# future schema fix ever adds real relationship-typed FK columns (see
+# docs/schema.md's already-fixed CaseStatusID_FK bug), this ban must be
+# re-verified live before trusting it's still true, not assumed permanent.
+# Cross-table filtering instead happens as a chain of single-table SELECTs
+# in Python — same batched, no-N+1 pattern already used in network.py —
+# with each step's WHERE clause referencing the previous step's result IDs
+# via a literal {prev} substitution, never a nested SELECT: confirmed live
+# as 'Nested Sub query is not supported' on this project's ZCQL version.
+# docs/zcql.md DOES document WHERE-clause subqueries as a ZCQL V2 feature —
+# so this project is most likely pinned to ZCQL V1, and the ban is a
+# version limitation, not a permanent ZCQL restriction; re-verify if the
+# project ever migrates to V2, since validate_plan's blanket "no SELECT
+# inside a step" check would then be wrongly rejecting legal V2 syntax.
 # ---------------------------------------------------------------------------
 
 _PLAN_SYSTEM_PROMPT = (
@@ -168,7 +200,28 @@ _PLAN_SYSTEM_PROMPT = (
     "The plan is a JSON object: "
     '{"steps": [{"table": <name>, "select": <single column, or an '
     'aggregate like COUNT(CseMasterID)>, "where": <condition string, or '
-    '"">, "is_final": <bool>}, ...]}\n\n'
+    '"">, "group_by": <single column, or "", only meaningful on the final '
+    'step>, "having": <aggregate condition on the group, e.g. '
+    '"COUNT(CseMasterID) > 5", or "" -- only on the final step, and only '
+    'when group_by is also set>, "order_by": <e.g. "COUNT(CseMasterID) '
+    'DESC", or "", only on the final step>, "limit": <int or null, only on '
+    'the final step>, "is_final": <bool>}, ...]}\n\n'
+    "Use having for questions filtering ON the aggregate itself (e.g. "
+    "\"districts with more than 5 cases\"), never in where -- where can "
+    "only filter raw rows before grouping. Example for \"police stations "
+    "with more than 10 cases\": "
+    '{"steps": [{"table": "CaseMaster", "select": '
+    '"PoliceStationID_FK, COUNT(CseMasterID)", "where": "", "group_by": '
+    '"PoliceStationID_FK", "having": "COUNT(CseMasterID) > 10", '
+    '"is_final": true}]}\n\n'
+    "For 'top N' / 'most common' / 'hotspot' questions that need a count "
+    "per group, use group_by on the grouping column, order_by the "
+    "aggregate descending, and limit N — all on the final step only. "
+    "Example for \"top 3 police stations by number of cases\": "
+    '{"steps": [{"table": "CaseMaster", "select": '
+    '"PoliceStationID_FK, COUNT(CseMasterID)", "where": "", "group_by": '
+    '"PoliceStationID_FK", "order_by": "COUNT(CseMasterID) DESC", "limit": '
+    '3, "is_final": true}]}\n\n'
     "Rules, all confirmed against real API behavior, not hypothetical:\n"
     "- NO JOIN keyword anywhere — this database's foreign-key columns are "
     "plain integers, not real relationships, so JOIN always fails.\n"
@@ -225,14 +278,36 @@ _PLAN_SYSTEM_PROMPT = (
     "(e.g. NEVER write DistrictID_FK = 'Bengaluru' or DistrictID_FK LIKE '%bengaluru%'). "
     "String filters must ONLY target string columns (e.g. District.DistrictName, "
     "CrimeSubHead.CrimeHeadName, Unit.UnitName).\n"
-    "- For district/city queries (e.g. 'Bengaluru', 'Mysuru'), filter District "
-    "table using DistrictName LIKE '%bengaluru%' (or DistrictName LIKE '%Bengaluru%') "
-    "in step 0, then filter Unit on DistrictID_FK IN ({prev}) in step 1.\n"
+    "- ZCQL LIKE wildcards are '*' (zero or more chars) and '?' (exactly one "
+    "char) — NOT SQL's '%' or '_'. '%' is a literal character in ZCQL, so "
+    "'%bengaluru%' matches nothing. For district/city queries (e.g. "
+    "'Bengaluru', 'Mysuru'), filter District table using DistrictName LIKE "
+    "'*Bengaluru*' in step 0, then filter Unit on DistrictID_FK IN ({prev}) "
+    "in step 1.\n"
     "Specific offence names (Murder, Robbery, Theft, NDPS, Dacoity, etc.) "
     "are in CrimeSubHead.CrimeHeadName — NOT CrimeHead.CrimeGroupName, "
     "which only holds broad categories like 'Crimes Against Body'. A "
     "question naming a specific offence must filter CrimeSubHead."
     "CrimeHeadName, joining to CaseMaster via CrimeMinorHeadID_FK.\n"
+    "- DATE/DATETIME literals must be quoted strings in 'YYYY-MM-DD' form "
+    "(e.g. CrimeRegisteredDate >= '2024-01-01' AND CrimeRegisteredDate <= "
+    "'2024-12-31'). Never use a bare year number or a function call. "
+    "Worked example for \"murder cases registered in 2024\":\n"
+    '{"steps": ['
+    '{"table": "CrimeSubHead", "select": "ROWID", '
+    '"where": "CrimeHeadName = \'Murder\'", "is_final": false}, '
+    '{"table": "CaseMaster", "select": "CseMasterID", '
+    '"where": "CrimeMinorHeadID_FK IN ({prev}) AND CrimeRegisteredDate >= '
+    '\'2024-01-01\' AND CrimeRegisteredDate <= \'2024-12-31\'", '
+    '"is_final": true}'
+    "]}\n"
+    "- BOOLEAN columns (e.g. IsOutdoor, IsAccused, IsComplainantAccused, "
+    "Active) only support = and != — never LIKE, BETWEEN, IN, <, >, <=, "
+    ">= on a boolean column. Compare to bare unquoted TRUE or FALSE, never "
+    "a quoted string or 1/0, e.g. \"IsOutdoor = TRUE\".\n"
+    "- If a string literal itself contains an apostrophe (e.g. a name "
+    "like O'Brien), double it inside the literal: 'O''Brien', never a "
+    "single unescaped quote — a lone apostrophe breaks the literal.\n"
     "Respond with ONLY the JSON object, no prose, no markdown fences."
 )
 
@@ -281,13 +356,25 @@ def _normalize_plan(plan: QueryPlan) -> str:
     return json.dumps([s.model_dump() for s in plan.steps], sort_keys=True)
 
 
+def _render_step_sql(step: QueryStep, where: str) -> str:
+    sql = f"SELECT {step.select} FROM {step.table}"
+    if where:
+        sql += f" WHERE {where}"
+    if step.group_by:
+        sql += f" GROUP BY {step.group_by}"
+    if step.having:
+        sql += f" HAVING {step.having}"
+    if step.order_by:
+        sql += f" ORDER BY {step.order_by}"
+    if step.limit is not None:
+        sql += f" LIMIT {step.limit}"
+    return sql
+
+
 def render_plan_as_sql(plan: QueryPlan) -> str:
     """Debug-friendly rendering for the envelope's generated_sql field —
     not itself executable as one statement, just a readable trace."""
-    return "; ".join(
-        f"SELECT {s.select} FROM {s.table}" + (f" WHERE {s.where}" if s.where else "")
-        for s in plan.steps
-    )
+    return "; ".join(_render_step_sql(s, s.where) for s in plan.steps)
 
 
 def validate_plan(plan: QueryPlan) -> None:
@@ -314,7 +401,13 @@ def validate_plan(plan: QueryPlan) -> None:
     for i, step in enumerate(plan.steps):
         if step.table not in ALLOWED_SCHEMA:
             raise PipelineError(f"plan step {i} references unknown table {step.table!r}")
-        combined = f"{step.select} {step.where}".upper()
+        if not step.is_final and (step.group_by or step.having or step.order_by or step.limit is not None):
+            raise PipelineError(
+                f"plan step {i} sets group_by/having/order_by/limit but isn't the final step: {step!r}"
+            )
+        if step.having and not step.group_by:
+            raise PipelineError(f"plan step {i} sets having without group_by — HAVING requires GROUP BY: {step!r}")
+        combined = f"{step.select} {step.where} {step.having}".upper()
         for kw in _FORBIDDEN_SQL_KEYWORDS:
             if kw in combined:
                 raise PipelineError(f"plan step {i} contains forbidden token {kw!r}: {step!r}")
@@ -337,6 +430,43 @@ def validate_plan(plan: QueryPlan) -> None:
                     f"(e.g. District.DistrictName, CrimeSubHead.CrimeHeadName, Unit.UnitName), never ID or _FK columns."
                 )
 
+        # Guard: BOOLEAN columns only support = and != in ZCQL, compared to
+        # bare TRUE/FALSE (docs/zcql.md's boolean exceptions table) — the
+        # prompt states this but nothing else enforced it, so a slip here
+        # previously only surfaced as an unexplained live 400 with no
+        # repair retry (execute_plan has none for post-validation failures).
+        for bool_col in BOOLEAN_COLUMNS.get(step.table, set()):
+            op_match = re.search(
+                rf"\b{re.escape(bool_col)}\b\s*(!=|=|<=|>=|<|>|LIKE|IN|BETWEEN)",
+                step.where, re.IGNORECASE,
+            )
+            if not op_match:
+                continue
+            op = op_match.group(1).upper()
+            if op not in ("=", "!="):
+                raise PipelineError(
+                    f"plan step {i} ({step.table}) uses operator {op!r} on BOOLEAN column {bool_col!r} — "
+                    f"ZCQL only supports = and != for BOOLEAN columns, never LIKE/BETWEEN/IN/</>/<=/>=."
+                )
+            rest = step.where[op_match.end():].strip()
+            value_token = rest.split()[0].rstrip(",)") if rest else ""
+            if value_token.upper() not in ("TRUE", "FALSE"):
+                raise PipelineError(
+                    f"plan step {i} ({step.table}) compares BOOLEAN column {bool_col!r} to {value_token!r} — "
+                    f"must be bare unquoted TRUE or FALSE, never a quoted string or 1/0."
+                )
+
+        # Guard: an odd number of single quotes outside recognized
+        # 'literal' spans means an unescaped apostrophe broke a string
+        # literal mid-value (e.g. a name like O'Brien) — ZCQL's own docs
+        # don't document an escape convention, so this is caught here
+        # rather than reaching ZCQL as a malformed-query 400.
+        if "'" in re.sub(r"'[^']*'", "", step.where):
+            raise PipelineError(
+                f"plan step {i} ({step.table}) has an unmatched/unescaped single quote in a string literal: "
+                f"{step.where!r}. Double any apostrophe inside a literal (e.g. O'Brien -> O''Brien)."
+            )
+
         refs = re.findall(r"\{PREV(\d*)\}", combined)
         if not refs:
             continue  # fresh anchor step — no prior-step dependency to check
@@ -355,19 +485,19 @@ def generate_plan_with_self_consistency(question: str, intent: QueryIntent) -> t
     """Generates the plan twice (each with its own repair retry, see
     _generate_valid_plan) and diffs (CLAUDE.md: self-consistency check is
     mandatory, not optional). Returns (plan_to_use, consistent)."""
-    first = second = None
-    first_error = second_error = None
-    try:
-        first = _generate_valid_plan(question, intent)
-    except PipelineError as e:
-        first_error = e
-    try:
-        second = _generate_valid_plan(question, intent)
-    except PipelineError as e:
-        second_error = e
+    candidates: list[QueryPlan | None] = []
+    errors: list[PipelineError | None] = []
+    for _ in range(2):
+        try:
+            candidates.append(_generate_valid_plan(question, intent))
+            errors.append(None)
+        except PipelineError as e:
+            candidates.append(None)
+            errors.append(e)
+    first, second = candidates
 
     if first is None and second is None:
-        raise PipelineError(f"both self-consistency plan candidates failed validation: {first_error} / {second_error}")
+        raise PipelineError(f"both self-consistency plan candidates failed validation: {errors[0]} / {errors[1]}")
     if first is None:
         return second, False
     if second is None:
@@ -380,6 +510,33 @@ def generate_plan_with_self_consistency(question: str, intent: QueryIntent) -> t
 # ---------------------------------------------------------------------------
 # Execute + post-execution sanity check
 # ---------------------------------------------------------------------------
+
+def _resolve_fk_labels(zcql_service: Any, table: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Replaces raw FK integer values in final rows with the target table's
+    display label (e.g. CaseStatusID_FK 53418... -> "Under Investigation"),
+    via one batched single-table lookup per FK column present in the rows —
+    no JOIN needed, same zcql_util.run pattern used everywhere else."""
+    if not rows:
+        return rows
+    for col in list(rows[0].keys()):
+        target = FK_LABEL_TARGETS.get((table, col))
+        if not target:
+            continue
+        target_table, target_pk, label_col = target
+        ids = sorted({str(r[col]) for r in rows if r.get(col) is not None})
+        if not ids:
+            continue
+        lookup_sql = f"SELECT {target_pk}, {label_col} FROM {target_table} WHERE {target_pk} IN ({', '.join(ids)})"
+        try:
+            lookup_rows = zcql_util.run(zcql_service, lookup_sql)
+        except zcql_util.ZcqlError:
+            continue  # label resolution is best-effort — keep raw ID rather than fail the whole answer
+        labels = {str(lr[target_pk]): lr[label_col] for lr in lookup_rows if target_pk in lr and label_col in lr}
+        for r in rows:
+            if col in r and str(r[col]) in labels:
+                r[col] = labels[str(r[col])]
+    return rows
+
 
 def execute_plan(zcql_service: Any, plan: QueryPlan) -> list[dict[str, Any]]:
     # step_ids[i] holds step i's resolved ID list once it runs (only
@@ -399,13 +556,13 @@ def execute_plan(zcql_service: Any, plan: QueryPlan) -> list[dict[str, Any]]:
             ),
             step.where,
         )
-        sql = f"SELECT {step.select} FROM {step.table}" + (f" WHERE {where}" if where else "")
+        sql = _render_step_sql(step, where)
         try:
             rows = zcql_util.run(zcql_service, sql)
         except zcql_util.ZcqlError as e:
             raise PipelineError(f"plan step against {step.table!r} failed: {e} (sql={sql!r})") from e
         if step.is_final:
-            final_rows = rows
+            final_rows = _resolve_fk_labels(zcql_service, step.table, rows)
         else:
             select_col = step.select.strip()
             ids = [int(r[select_col]) for r in rows if select_col in r]
