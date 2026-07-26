@@ -1,9 +1,40 @@
-.env
-__pycache__/
-*.pyc
-node_modules/
-export_*.zip
+# Secrets & Environment
+.env*
+!.env.example
+
+
 .build/
+*.dll
+*.so
+*.dylib
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+
+# Node / JS
+node_modules/
+**/node_modules/
+dist/
+build/
+.build/
+
+# IDEs & System
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Tooling & Workspaces
 .claude/
 .impeccable/
-venv/
+export_*.zip
+
+# Datathon Artifacts / Large Media (Optional)
+# *.csv
+# *.parquet
+# *.png
