@@ -1,0 +1,13 @@
+{
+	"deployment": {
+		"name": "datathon_2026_function",
+		"stack": "python_3_12",
+		"type": "advancedio",
+		"env_variables": {
+			"ALLOW_UNAUTHENTICATED": "true"
+		}
+	},
+	"execution": {
+		"main": "main.py"
+	}
+}

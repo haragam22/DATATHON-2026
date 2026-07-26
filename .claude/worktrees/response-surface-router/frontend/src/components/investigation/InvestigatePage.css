@@ -1,0 +1,64 @@
+/* ── Investigate Page layout ── */
+
+.investigate-page {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+  background: var(--ink-950);
+}
+
+/* Left sidebar: Similar Cases panel */
+.investigate-page__sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: var(--ink-900);
+  border-right: 1px solid var(--line-700);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Center: Investigation Board */
+.investigate-page__main {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Right: Entity Sidecar (slides in) */
+.investigate-page__sidecar {
+  width: 300px;
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Responsive: collapse sidebar on narrow viewports */
+@media (max-width: 900px) {
+  .investigate-page__sidebar {
+    width: 200px;
+  }
+  .investigate-page__sidecar {
+    width: 240px;
+  }
+}
+
+@media (max-width: 680px) {
+  .investigate-page {
+    flex-direction: column;
+  }
+  .investigate-page__sidebar,
+  .investigate-page__sidecar {
+    width: 100%;
+    height: auto;
+    max-height: 200px;
+    border-right: none;
+    border-bottom: 1px solid var(--line-700);
+  }
+  .investigate-page__main {
+    flex: 1;
+  }
+}

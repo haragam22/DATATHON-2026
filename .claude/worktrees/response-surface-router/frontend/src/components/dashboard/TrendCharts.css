@@ -1,0 +1,64 @@
+/* ── Trend Charts CSS ── */
+
+.trend-charts {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--ink-900);
+}
+
+.trend-charts__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--line-700);
+  background: var(--ink-900);
+}
+
+.trend-charts__tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--ink-950);
+  padding: 2px;
+  border-radius: var(--radius-card);
+}
+
+.trend-charts__tab {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-chip);
+  color: var(--text-400);
+  transition: background 150ms var(--ease-out), color 150ms var(--ease-out);
+}
+
+.trend-charts__tab--active {
+  background: var(--ink-800);
+  color: var(--ksp-gold);
+}
+
+.trend-charts__body {
+  flex: 1;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.trend-charts__status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 200px;
+}
+
+.trend-charts__canvas {
+  width: 100%;
+}
+
+.chart-tooltip {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-card);
+}

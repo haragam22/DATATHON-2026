@@ -1,0 +1,58 @@
+/* ── Follow-Up Buttons ── */
+
+.follow-up-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  padding: 0 var(--space-1);
+}
+
+.follow-up-buttons__label {
+  letter-spacing: var(--tracking-label);
+  margin-left: 2px;
+}
+
+.follow-up-buttons__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.follow-up-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 4px 10px;
+  background: var(--ink-900);
+  border: 1px solid var(--line-700);
+  border-radius: var(--radius-chip);
+  color: var(--text-400);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  user-select: none;
+  transition: all 120ms var(--ease-out);
+  text-align: left;
+}
+
+.follow-up-chip:hover:not(:disabled) {
+  background: var(--ink-700);
+  color: var(--text-100);
+  border-color: var(--ksp-blue);
+  transform: translateY(-1px);
+}
+
+.follow-up-chip:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.follow-up-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.follow-up-chip__icon {
+  color: var(--ksp-blue);
+  flex-shrink: 0;
+}
